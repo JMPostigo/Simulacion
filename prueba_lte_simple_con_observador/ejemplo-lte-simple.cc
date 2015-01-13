@@ -1,0 +1,104 @@
+/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * Copyright (c) 2011 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * Author: Manuel Requena <manuel.requena@cttc.es>
+ */
+
+
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/lte-module.h"
+#include "ns3/config-store.h"
+#include <ns3/buildings-helper.h>
+//#include "ns3/gtk-config-store.h"
+#include "Observador.h"
+
+
+using namespace ns3;
+
+int main (int argc, char *argv[])
+{	
+  CommandLine cmd;
+  cmd.Parse (argc, argv);
+	
+  // to save a template default attribute file run it like this:
+  // ./waf --command-template="%s --ns3::ConfigStore::Filename=input-defaults.txt --ns3::ConfigStore::Mode=Save --ns3::ConfigStore::FileFormat=RawText" --run src/lte/examples/lena-first-sim
+  //
+  // to load a previously created default attribute file
+  // ./waf --command-template="%s --ns3::ConfigStore::Filename=input-defaults.txt --ns3::ConfigStore::Mode=Load --ns3::ConfigStore::FileFormat=RawText" --run src/lte/examples/lena-first-sim
+
+  ConfigStore inputConfig;
+  inputConfig.ConfigureDefaults ();
+
+  // Se parsea para sobreescribir los valores por defecto de linea de comandos
+  cmd.Parse (argc, argv);
+
+  Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
+
+  // Descomentar la siguiente linea para habilitar el logging
+  //  lteHelper->EnableLogComponents ();
+
+  // Crear los nodos: eNodeB y UE
+  NodeContainer enbNodes;
+  NodeContainer ueNodes;
+  enbNodes.Create (1);
+  ueNodes.Create (2);
+
+  // Se pone la movilidad
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (enbNodes);
+  BuildingsHelper::Install (enbNodes);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (ueNodes);
+  BuildingsHelper::Install (ueNodes);
+
+  // Crea los dispositivos de red y los instala en los nodos (eNB and UE)
+  NetDeviceContainer enbDevs;
+  NetDeviceContainer ueDevs;
+  // Por defecto, el scheduler es PF, descomentar la siguiente linea para usar RR
+  //lteHelper->SetSchedulerType ("ns3::RrFfMacScheduler");
+
+  enbDevs = lteHelper->InstallEnbDevice (enbNodes);
+  ueDevs = lteHelper->InstallUeDevice (ueNodes);
+
+  // Se añade el UE al eNB
+  lteHelper->Attach (ueDevs, enbDevs.Get (0));
+
+  // Activa el data radio bearer entre el eNodeB y el UE
+  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
+  EpsBearer bearer (q);
+  lteHelper->ActivateDataRadioBearer (ueDevs, bearer);
+  lteHelper->EnableTraces ();
+  
+  // Se pone el tiempod e parada
+  Simulator::Stop (Seconds (1.05));
+  
+  // Llamamos al observador
+  Observador obser (ueNodes.Get (0)->GetDevice (0), enbNodes.Get (0)->GetDevice (0));
+
+  // Iniciamos la simulacion
+  Simulator::Run ();
+
+  // GtkConfigStore config;
+  // config.ConfigureAttributes ();
+
+  Simulator::Destroy ();
+  return 0;
+}
+
