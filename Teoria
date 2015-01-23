@@ -1,0 +1,85 @@
+
+/* Trace sources que se pueden capturar con NS3 para LTE */
+
+ns3::LteEnbMac
+DlScheduling: Information regarding DL (Downlink) scheduling.
+UlScheduling: Information regarding UL (Uplink) scheduling.
+ 
+ /* 
+ *   
+ */
+
+
+ns3::LtePdcp
+TxPDU: PDU transmission notified to the Radio Link Control (RLC).
+RxPDU: PDU received.
+
+/*
+*  RLC es un protocolo que se habla entre el UE y el eNode y va por encima de la capa MAC
+*  PDCP es un protocolo que está pro encima de RLC y por debajo de IP
+*  Es decir:
+*
+*               UE                                    eNB
+*       /-----------------/
+*       /       APP       /
+*       /-----------------/
+*       /     TCP/UDP     /
+*       /-----------------/
+*       /       IP        /
+*       /-----------------/           /-----------------/  /-----------------/
+*       /      PDCP       /           /       PDCP      /  /      GTP        /
+*       /-----------------/           /-----------------/  /-----------------/
+*       /       RLC       /           /       RLC       /  /      UDP        /
+*       /-----------------/           /-----------------/  /-----------------/
+*       /       MAC       /           /       MAC       /  /        IP       /
+*       /-----------------/           /-----------------/  /-----------------/
+*       /       PHY       /           /     PHY         /      
+*       /-----------------/           /-----------------/  
+*/
+
+ns3::LteRlc
+TxPDU: PDU transmission notified to the MAC.
+RxPDU: PDU received.
+ns3::LteUeRrc
+MibReceived: trace fired upon reception of Master Information Block
+Sib1Received: trace fired upon reception of System Information Block Type 1
+Sib2Received: trace fired upon reception of System Information Block Type 2
+StateTransition: trace fired upon every UE RRC state transition
+InitialCellSelectionEndOk: trace fired upon successful initial cell selection procedure
+InitialCellSelectionEndError: trace fired upon failed initial cell selection procedure
+RandomAccessSuccessful: trace fired upon successful completion of the random access procedure
+RandomAccessError: trace fired upon failure of the random access procedure
+ConnectionEstablished: trace fired upon successful RRC connection establishment
+ConnectionReconfiguration: trace fired upon RRC connection reconfiguration
+HandoverStart: trace fired upon start of a handover procedure
+HandoverEndOk: trace fired upon successful termination of a handover procedure
+HandoverEndError: trace fired upon failure of a handover procedure
+ns3::UeManager
+StateTransition: fired upon every UE state transition seen by the UeManager at the eNB RRC
+ns3::LteEnbRrc
+NewUeContext: trace fired upon creation of a new UE context
+ConnectionEstablished: trace fired upon successful RRC connection establishment
+ConnectionReconfiguration: trace fired upon RRC connection reconfiguration
+HandoverStart: trace fired upon start of a handover procedure
+HandoverEndOk: trace fired upon successful termination of a handover procedure
+RecvMeasurementReport: trace fired when measurement report is received
+ns3::LteUePhy
+ReportCurrentCellRsrpSinr: RSRP and SINR statistics.
+UlPhyTransmission: DL transmission PHY layer statistics.
+ReportUeMeasurements: Report UE measurements RSRP (dBm) and RSRQ (dB).
+StateTransition: Trace fired upon every UE PHY state transition
+ns3::LteEnbPhy
+ReportUeSinr: Report UEs' averaged linear SINR
+ReportInterference: Report linear interference power per PHY RB
+DlPhyTransmission: DL transmission PHY layer statistics.
+ns3::LteSpectrumPhy
+TxStart: Trace fired when a new transmission is started
+TxEnd: Trace fired when a previosuly started transmission is finished
+RxStart: Trace fired when the start of a signal is detected
+RxEndOk: Trace fired when a previosuly started RX terminates successfully
+RxEndError: Trace fired when a previosuly started RX terminates with an error
+DlPhyReception: DL reception PHY layer statistics.
+UlPhyReception: DL reception PHY layer statistics.
+
+
+
