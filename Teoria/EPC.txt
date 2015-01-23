@@ -1,0 +1,15 @@
+
+/*  EPC   */
+
+En la simulación, podemos distinguir dos modelos:
+  - LTE: formado por el eNode y el UE
+  - EPC: es el núcleo de la red , formado por los nodos SGW, PGW y MME
+
+Forma de crearlo:
+
+/*
+* Ptr<EpcHelper> epcHelper = CreateObject<EpcHelper> ();
+* LteHelper->SetEpcHelper (epcHelper);
+*/
+
+
