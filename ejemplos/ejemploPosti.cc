@@ -1,6 +1,8 @@
 /*
 	Ejemplo montado a partir de 
 	http://www.nsnam.org/docs/release/3.10/manual/html/lte.html#attributes
+	
+	COMENTARIO: Me da errores de compilación
 */
 
 #include "ns3/core-module.h"
