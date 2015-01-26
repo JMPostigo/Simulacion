@@ -40,6 +40,11 @@ RxPDU: PDU received.
 ns3::LteRlc
 TxPDU: PDU transmission notified to the MAC.
 RxPDU: PDU received.
+
+/*
+* La capa RLC puede estar de tres modos: transparente (TM), Sin asentimiento (UM) o Con asentimiento (AM)
+*/
+
 ns3::LteUeRrc
 MibReceived: trace fired upon reception of Master Information Block
 Sib1Received: trace fired upon reception of System Information Block Type 1
@@ -54,6 +59,11 @@ ConnectionReconfiguration: trace fired upon RRC connection reconfiguration
 HandoverStart: trace fired upon start of a handover procedure
 HandoverEndOk: trace fired upon successful termination of a handover procedure
 HandoverEndError: trace fired upon failure of a handover procedure
+
+/*
+*  RRC es la capa de aplicación encargada de la señalización 
+*/
+
 ns3::UeManager
 StateTransition: fired upon every UE state transition seen by the UeManager at the eNB RRC
 ns3::LteEnbRrc
