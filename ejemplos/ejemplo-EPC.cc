@@ -1,9 +1,11 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 /*
-*   TODO: capturar trazas Tx y Rx para el EPC ,  Imprimir las estadisticas del PDCPStats tras la simulacion
-*     Ramón: El PDCPStats, en la mayoría de sus métodos, necesita el IMSI del terminal y el valor LCID, que
-*     habría que investigar.
+*   TODO 1: comparar traficos VoIP, Datos y Video viendo el Delay y modificando el instante de traspaso 
+*   TODO 2: Ver en qué parte se pierden más paquetes (Ue-eNode-pgw-server)
+*
+*   Info: este documento consigue estadisticas usando "lteHelper->GetPdcpStats ()"
 */
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
@@ -18,7 +20,7 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("LenaX2HandoverExample");
 
-/*        Funciones que manejan las trazas RRC         */
+/*   NOTIFICADORES DEL RRC    */
 void NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
 {
   std::cout << Simulator::Now ().GetSeconds () << " " << context
@@ -50,7 +52,7 @@ void NotifyHandoverEndOkUe (std::string context, uint64_t imsi, uint16_t cellid,
 void NotifyConnectionEstablishedEnb (std::string context, uint64_t imsi, uint16_t cellid,uint16_t rnti)
 {
   std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << "CONEXION ESTABLECIDA: eNB CellId " << cellid
+            << " CONEXION ESTABLECIDA: eNB CellId " << cellid
             << ": successful connection of UE with IMSI " << imsi
             << " RNTI " << rnti
             << std::endl;
@@ -59,7 +61,7 @@ void NotifyConnectionEstablishedEnb (std::string context, uint64_t imsi, uint16_
 void NotifyHandoverStartEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti, uint16_t targetCellId)
 {
   std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << "HANDOVER START: eNB CellId " << cellid
+            << " HANDOVER START: eNB CellId " << cellid
             << ": start handover of UE with IMSI " << imsi
             << " RNTI " << rnti
             << " to CellId " << targetCellId
@@ -69,12 +71,35 @@ void NotifyHandoverStartEnb (std::string context, uint64_t imsi, uint16_t cellid
 void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
 {
   std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << "HANDOVER END: eNB CellId " << cellid
+            << " HANDOVER END: eNB CellId " << cellid
             << ": completed handover of UE with IMSI " << imsi
             << " RNTI " << rnti
             << std::endl;
 }
 
+/*                         NOTIFICADORES DE TX y RX                                                   */
+
+void LteSimpleHelperDlTxPduCallback (Ptr<RadioBearerStatsCalculator> rlcStats, std::string path,
+                 uint16_t rnti, uint8_t lcid, uint32_t packetSize)
+{
+  std::cout << " Se envia una trama " << std::endl;
+
+  NS_LOG_FUNCTION (rlcStats << path << rnti << (uint16_t)lcid << packetSize);
+  uint64_t imsi = 111;
+  uint16_t cellId = 222;
+  rlcStats->DlTxPdu (cellId, imsi, rnti, lcid, packetSize);
+}
+
+void LteSimpleHelperDlRxPduCallback (Ptr<RadioBearerStatsCalculator> rlcStats, std::string path,
+                 uint16_t rnti, uint8_t lcid, uint32_t packetSize, uint64_t delay)
+{
+  std::cout << " Se recibe una trama " << std::endl;
+
+  NS_LOG_FUNCTION (rlcStats << path << rnti << (uint16_t)lcid << packetSize << delay);
+  uint64_t imsi = 333;
+  uint16_t cellId = 555;
+  rlcStats->DlRxPdu (cellId, imsi, rnti, lcid, packetSize, delay);
+}
 
 
 /**
@@ -84,8 +109,6 @@ void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid
  */
 int main (int argc, char *argv[])
 {
-  // Activa logging para las siguientes clases a los niveles que define la variable logLevel.
-
   // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
   // LogComponentEnable ("LteHelper", logLevel);
   // LogComponentEnable ("EpcHelper", logLevel);
@@ -97,7 +120,7 @@ int main (int argc, char *argv[])
   // LogComponentEnable ("LteUeRrc", logLevel);
   // LogComponentEnable ("LteUeNetDevice", logLevel);
 
-  uint16_t numberOfUes = 1;
+  uint16_t numberOfUes = 2;
   uint16_t numberOfEnbs = 2;
   uint16_t numBearersPerUe = 2;
   double simTime = 8.0;
@@ -106,14 +129,8 @@ int main (int argc, char *argv[])
   // change some default attributes so that they are reasonable for
   // this scenario, but do this before processing command line
   // arguments, so that the user is allowed to override these settings
-
-  /* La clase UdpClient NO tiene trazas. Podría ser conveniente cambiarlo por otra que
-  las tenga (como OnOff, Bulk...; la que convenga). */
   Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
   Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
-
-  // Usará el modelo real para la señalización RRC (que añadirá pérdidas y tal, supongo).
-
   Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
 
   // Command line arguments
@@ -125,26 +142,24 @@ int main (int argc, char *argv[])
   
   // Para la parte del LTE
   Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
-  // La parte del epc. PointToPoint, usado en el EPC (ver diagrama de la documentación)
+  // La parte del epc
   Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
   // Se unen las dos partes
   lteHelper->SetEpcHelper (epcHelper);
-  // Planificador para los nodos eNB.
   lteHelper->SetSchedulerType ("ns3::RrFfMacScheduler");
-  // Se desabilita el traspaso automático (de hecho, no hace nada).
-  lteHelper->SetHandoverAlgorithmType ("ns3::NoOpHandoverAlgorithm");
+  lteHelper->SetHandoverAlgorithmType ("ns3::NoOpHandoverAlgorithm"); // Se desabilita el handover automatico
 
 
-  /*   PARTE DEL EPC  */
+  /*             PARTE DEL EPC                */
 
-  // Guardamos el nodo SGW/PGW que sera la pasarela a internet
+  // Guardamos el nodo SGW/PFW que sera la pasarela a internet
   Ptr<Node> pgw = epcHelper->GetPgwNode ();
 
   // Se crea un host remoto
   NodeContainer remoteHostContainer;
   remoteHostContainer.Create (1);
   Ptr<Node> remoteHost = remoteHostContainer.Get (0);
-  InternetStackHelper internet; // Mezcla rutas estáticas y globales, por defecto.
+  InternetStackHelper internet;
   internet.Install (remoteHostContainer);
 
   // Creamos la conexion a Internet
@@ -154,20 +169,17 @@ int main (int argc, char *argv[])
   p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
   
   // Se instalan sgw/pgw y remoteHost en Internet
-  /* Hay una conexión punto a punto entre el SGW/PGW y el equipo remoto. Se intenta modelar con un
-  enlace punto a punto con retardo. Puede parecer más o menos realista, pero la parte donde realmente
-  habría problemas de interferencias y tal es la parte LTE, luego veo bien el modelado de esta parte (si
-  acaso mirar más detenidamente si admite alguna configuración más para complementar) */
   NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
   Ipv4AddressHelper ipv4h;
   ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
   Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);
-  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1); // Para el cliente UDP.
+  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
   // Routing of the Internet Host (towards the LTE network)
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
-  // interface 0 is localhost, 1 is the p2p device. Ruta para ese destino.
+  // interface 0 is localhost, 1 is the p2p device
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+
 
 
   /*                     Parte del LTE                       */
@@ -186,16 +198,13 @@ int main (int argc, char *argv[])
     }
   for (uint16_t i = 0; i < numberOfUes; i++)
     {
-      positionAlloc->Add (Vector (0, 0, 0));
+      positionAlloc->Add (Vector (-50, 0, 0));
     }
   MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.SetPositionAllocator (positionAlloc);
   mobility.Install (enbNodes);
   mobility.Install (ueNodes);
-  /* Opino. Si van a estar quietos, bastaría con poner un nodo enb, porque si no se mueve,
-  nuncá habrá un traspaso del UE de un nodo enb a otro. Aunque habría que verlo en las
-  simulaciones. */
 
   // Install LTE Devices in eNB and UEs
   NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
@@ -223,13 +232,11 @@ int main (int argc, char *argv[])
 
   NS_LOG_LOGIC ("setting up applications");
   
-  
-  
-  /*                Instalar e iniciar las aplicaicones de los UEs y el remote host                */
+  /*                Install and start applications on UEs and remote host                */
   uint16_t dlPort = 10000;
   uint16_t ulPort = 20000;
 
-  // Se hace aleatorio el inicio de la simulacion
+  // Sehace aleatorio el inicio de la simulacion
   // (e.g., buffer overflows due to packet transmissions happening
   // exactly at the same time)
   Ptr<UniformRandomVariable> startTimeSeconds = CreateObject<UniformRandomVariable> ();
@@ -237,7 +244,6 @@ int main (int argc, char *argv[])
   startTimeSeconds->SetAttribute ("Max", DoubleValue (1.010));
 
   // Se pone la aplicacion en cada UE
-  // Comentario: Aun no entiendo muy bien como va lo de las aplicaciones
   for (uint32_t u = 0; u < numberOfUes; ++u)
     {
       Ptr<Node> ue = ueNodes.Get (u);
@@ -246,13 +252,8 @@ int main (int argc, char *argv[])
       Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ue->GetObject<Ipv4> ());
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
 
-      // Este paso de poner el gateway lo hace en la línea 210-216. Habría que ver si se está repitiendo.
-
       for (uint32_t b = 0; b < numBearersPerUe; ++b)
         {
-          /* Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
-          de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
-          calidad de servicio. */
           ++dlPort;
           ++ulPort;
 
@@ -302,16 +303,13 @@ int main (int argc, char *argv[])
     }
 
   // Pone una interfaz X2 en el eNodeB para señalizacion entre eNodesB (Por ejemplo para tareas de handover)
-  // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2.
-    // Es una interfaz entre enb's para evitar pérdidas de paquetes por traspaso de ue's entre enb's. Vamos,
-    // señalización.
   lteHelper->AddX2Interface (enbNodes);
 
-  // Se establece una peticion de handover
-  lteHelper->HandoverRequest (Seconds (0.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
+  //          -------- Se establece una peticion de handover         --------------  //
+  lteHelper->HandoverRequest (Seconds (4.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
 
   // Descomentar la siguiente linea para capturar las trazas
-  //p2ph.EnablePcapAll("lena-x2-handover");
+  p2ph.EnablePcapAll("lena-x2-handover");
   lteHelper->EnablePhyTraces ();
   lteHelper->EnableMacTraces ();
   lteHelper->EnableRlcTraces ();
@@ -331,7 +329,9 @@ int main (int argc, char *argv[])
   Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk", MakeCallback (&NotifyHandoverEndOkEnb));
   Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk", MakeCallback (&NotifyHandoverEndOkUe));
   
-
+  Config::Connect ("/NodeList/*/DeviceList/*/LteRlc/TxPDU", MakeBoundCallback (&LteSimpleHelperDlTxPduCallback, rlcStats));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteRlc/RxPDU", MakeBoundCallback (&LteSimpleHelperDlRxPduCallback, rlcStats));  
+ 
   // Se inicia el simulador
   Simulator::Stop (Seconds (simTime));
   Simulator::Run ();
@@ -340,7 +340,22 @@ int main (int argc, char *argv[])
   // GtkConfigStore config;
   // config.ConfigureAttributes ();
   Simulator::Destroy ();
+
+  // Imprime el retraso
+  for (int j = 0;j<2;j++) {
+        NS_LOG_UNCOND ("  ----  Ue: " << j << " ----- " );
+                
+        for (int i = 4; i<6;i++) {
+                uint64_t targetNodeID = ueLteDevs.Get (j)->GetObject<LteUeNetDevice> ()->GetImsi ();
+                std::vector< double > stats = lteHelper->GetRlcStats()->GetDlDelayStats(targetNodeID,i); // imsi, lcid
+  
+                NS_LOG_UNCOND ("DL:" << i << ":  avg Dl delay (in seconds) of target UE = " << stats[0] / 1.0e+9 );
+                NS_LOG_UNCOND ("DL:" << i << ":  std dev Dl delay (in seconds) of target UE = " << stats[1] / 1.0e+9 );  
+                NS_LOG_UNCOND ("DL:" << i << ":  min Dl delay (in seconds) of target UE = " << stats[2] / 1.0e+9 );
+                NS_LOG_UNCOND ("DL:" << i << ":  max Dl delay (in seconds) of target UE = " << stats[3] / 1.0e+9 );
+        }
+  }
+
   return 0;
 }
-
 
