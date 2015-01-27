@@ -63,7 +63,7 @@ int main (int argc, char *argv[])
   MobilityHelper mobility;
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (enbNodes);
-  BuildingsHelper::Install (enbNodes);
+  BuildingsHelper::Install (enbNodes);  // Y actualiza la movilidad del nodo.
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (ueNodes);
   BuildingsHelper::Install (ueNodes);
@@ -81,10 +81,10 @@ int main (int argc, char *argv[])
   lteHelper->Attach (ueDevs, enbDevs.Get (0));
 
   // Activa el data radio bearer entre el eNodeB y el UE
-  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
+  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;  // EPS Bearer: túnel entre UE y P-GW
   EpsBearer bearer (q);
   lteHelper->ActivateDataRadioBearer (ueDevs, bearer);
-  lteHelper->EnableTraces ();
+  lteHelper->EnableTraces (); // Activa todas las trazas.
   
   // Se pone el tiempod e parada
   Simulator::Stop (Seconds (1.05));
