@@ -2,6 +2,8 @@
 /*
 *   By Ramón. He quitado todo el tratamiento de trazas. En este ejemplo, sólo trataré las de aplicación.
 *     DA VIOLACIÓN DE SEGMENTO. DEBO DEPURARLO.
+*
+*   Activar todas las trazas: en línea de comandos -> export 'NS_LOG=p8_lte=level_all'
 */
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -248,13 +250,7 @@ int main (int argc, char *argv[])
   lteHelper->AddX2Interface (enbNodes);
 
   // Se establece una peticion de handover
-  lteHelper->HandoverRequest (Seconds (2), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
-
-  Ptr<RadioBearerStatsCalculator> rlcStats = lteHelper->GetRlcStats (); // Calculador de estadisticas del DL y UL
-  rlcStats->SetAttribute ("EpochDuration", TimeValue (Seconds (0.05))); // Se establece la duracion de la epoca
-
-  Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats (); // Calculador de estadisticas del DL y UL
-  pdcpStats->SetAttribute ("EpochDuration", TimeValue (Seconds (0.05))); // Se establece la duracion de la epoca
+  lteHelper->HandoverRequest (Seconds (0.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
 
   Observador nodos_obs;
   nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
@@ -262,8 +258,7 @@ int main (int argc, char *argv[])
   // Se inicia el simulador
   Simulator::Stop (Seconds (simTime));
   Simulator::Run ();
-  
-  
+
   // GtkConfigStore config;
   // config.ConfigureAttributes ();
   Simulator::Destroy ();
