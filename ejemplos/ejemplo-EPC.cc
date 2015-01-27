@@ -1,6 +1,8 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 /*
 *   TODO: capturar trazas Tx y Rx para el EPC ,  Imprimir las estadisticas del PDCPStats tras la simulacion
+*     Ramón: El PDCPStats, en la mayoría de sus métodos, necesita el IMSI del terminal y el valor LCID, que
+*     habría que investigar.
 */
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -82,6 +84,8 @@ void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid
  */
 int main (int argc, char *argv[])
 {
+  // Activa logging para las siguientes clases a los niveles que define la variable logLevel.
+
   // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
   // LogComponentEnable ("LteHelper", logLevel);
   // LogComponentEnable ("EpcHelper", logLevel);
@@ -102,8 +106,14 @@ int main (int argc, char *argv[])
   // change some default attributes so that they are reasonable for
   // this scenario, but do this before processing command line
   // arguments, so that the user is allowed to override these settings
+
+  /* La clase UdpClient NO tiene trazas. Podría ser conveniente cambiarlo por otra que
+  las tenga (como OnOff, Bulk...; la que convenga). */
   Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
   Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
+
+  // Usará el modelo real para la señalización RRC (que añadirá pérdidas y tal, supongo).
+
   Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
 
   // Command line arguments
@@ -115,24 +125,26 @@ int main (int argc, char *argv[])
   
   // Para la parte del LTE
   Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
-  // La parte del epc
+  // La parte del epc. PointToPoint, usado en el EPC (ver diagrama de la documentación)
   Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
   // Se unen las dos partes
   lteHelper->SetEpcHelper (epcHelper);
+  // Planificador para los nodos eNB.
   lteHelper->SetSchedulerType ("ns3::RrFfMacScheduler");
-  lteHelper->SetHandoverAlgorithmType ("ns3::NoOpHandoverAlgorithm"); // Se desabilita el handover automatico
+  // Se desabilita el traspaso automático (de hecho, no hace nada).
+  lteHelper->SetHandoverAlgorithmType ("ns3::NoOpHandoverAlgorithm");
 
 
-  /*             PARTE DEL EPC  (Esto te lo tienes que mirar bien Ramon)               */
+  /*   PARTE DEL EPC  */
 
-  // Guardamos el nodo SGW/PFW que sera la pasarela a internet
+  // Guardamos el nodo SGW/PGW que sera la pasarela a internet
   Ptr<Node> pgw = epcHelper->GetPgwNode ();
 
   // Se crea un host remoto
   NodeContainer remoteHostContainer;
   remoteHostContainer.Create (1);
   Ptr<Node> remoteHost = remoteHostContainer.Get (0);
-  InternetStackHelper internet;
+  InternetStackHelper internet; // Mezcla rutas estáticas y globales, por defecto.
   internet.Install (remoteHostContainer);
 
   // Creamos la conexion a Internet
@@ -142,17 +154,20 @@ int main (int argc, char *argv[])
   p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
   
   // Se instalan sgw/pgw y remoteHost en Internet
+  /* Hay una conexión punto a punto entre el SGW/PGW y el equipo remoto. Se intenta modelar con un
+  enlace punto a punto con retardo. Puede parecer más o menos realista, pero la parte donde realmente
+  habría problemas de interferencias y tal es la parte LTE, luego veo bien el modelado de esta parte (si
+  acaso mirar más detenidamente si admite alguna configuración más para complementar) */
   NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
   Ipv4AddressHelper ipv4h;
   ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
   Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);
-  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
+  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1); // Para el cliente UDP.
   // Routing of the Internet Host (towards the LTE network)
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
-  // interface 0 is localhost, 1 is the p2p device
+  // interface 0 is localhost, 1 is the p2p device. Ruta para ese destino.
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
-
 
 
   /*                     Parte del LTE                       */
@@ -178,6 +193,9 @@ int main (int argc, char *argv[])
   mobility.SetPositionAllocator (positionAlloc);
   mobility.Install (enbNodes);
   mobility.Install (ueNodes);
+  /* Opino. Si van a estar quietos, bastaría con poner un nodo enb, porque si no se mueve,
+  nuncá habrá un traspaso del UE de un nodo enb a otro. Aunque habría que verlo en las
+  simulaciones. */
 
   // Install LTE Devices in eNB and UEs
   NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
@@ -228,8 +246,13 @@ int main (int argc, char *argv[])
       Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ue->GetObject<Ipv4> ());
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
 
+      // Este paso de poner el gateway lo hace en la línea 210-216. Habría que ver si se está repitiendo.
+
       for (uint32_t b = 0; b < numBearersPerUe; ++b)
         {
+          /* Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
+          de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
+          calidad de servicio. */
           ++dlPort;
           ++ulPort;
 
@@ -279,7 +302,9 @@ int main (int argc, char *argv[])
     }
 
   // Pone una interfaz X2 en el eNodeB para señalizacion entre eNodesB (Por ejemplo para tareas de handover)
-  // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2
+  // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2.
+    // Es una interfaz entre enb's para evitar pérdidas de paquetes por traspaso de ue's entre enb's. Vamos,
+    // señalización.
   lteHelper->AddX2Interface (enbNodes);
 
   // Se establece una peticion de handover
