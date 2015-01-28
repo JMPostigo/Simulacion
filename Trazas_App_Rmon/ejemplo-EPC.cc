@@ -1,14 +1,10 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 /*
-*   By Ramón. He quitado todo el tratamiento de trazas. En este ejemplo, sólo trataré las de aplicación.
-*     Ya he conseguido arreglarlo. Por lo pronto, he tenido que descartar el BulkSendApplication y el
-*     OnOffApplication, ya que daba problemas del tipo "intenta transmitir mientras transmite", y el
-*     UdpClient, al configurarle el tiempo entre transmisiones, no lo hace. Por eso, habrá que tirar
-*     al final por ese cliente (que no tiene trazas, por lo que sólo nos valen las de capas de enlace/física).
-*     Podría ser problema de usar los 2 bearer (lo cual no lo entiendo). He quitado 1, y con eso me va el UdpClient.
-*     Probaré mañana con los otros 2, Bulk y OnOff.
+*   TODO: capturar trazas Tx y Rx para el EPC ,  Imprimir las estadisticas del PDCPStats tras la simulacion
+*   By Ramón. Funciona con UdpClient y con BulkSendApplication. Debería funcionar con OnOffApplication.
+*   Calcula el porcentaje de correctos perfectamente (sale, en su valor máximo, un 50%).
 *
-*   Activar todas las trazas: en línea de comandos -> export 'NS_LOG=p8_lte=level_all'
+*   Activar todas las trazas: en línea de comandos -> export 'NS_LOG=p8_lte=level_all:Observador=level_all'
 */
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -18,11 +14,70 @@
 #include "ns3/applications-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/config-store-module.h"
+//#include "ns3/rlc-stats-calculator.h"
 #include "Observador.h"
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("p8_lte");
+
+
+/*        Funciones que manejan las trazas RRC         */
+void NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " Conexión establecida:  UE IMSI " << imsi
+            << ": connected to CellId " << cellid
+            << " with RNTI " << rnti
+            << std::endl;
+}
+
+void NotifyHandoverStartUe (std::string context, uint64_t imsi,uint16_t cellid,uint16_t rnti, uint16_t targetCellId)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " HANDOVER START: UE IMSI " << imsi
+            << ": previously connected to CellId " << cellid
+            << " with RNTI " << rnti
+            << ", doing handover to CellId " << targetCellId
+            << std::endl;
+}
+
+void NotifyHandoverEndOkUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " HANDOVER END: UE IMSI " << imsi
+            << ": successful handover to CellId " << cellid
+            << " with RNTI " << rnti
+            << std::endl;
+}
+
+void NotifyConnectionEstablishedEnb (std::string context, uint64_t imsi, uint16_t cellid,uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << "CONEXION ESTABLECIDA: eNB CellId " << cellid
+            << ": successful connection of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << std::endl;
+}
+
+void NotifyHandoverStartEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti, uint16_t targetCellId)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << "HANDOVER START: eNB CellId " << cellid
+            << ": start handover of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << " to CellId " << targetCellId
+            << std::endl;
+}
+
+void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << "HANDOVER END: eNB CellId " << cellid
+            << ": completed handover of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << std::endl;
+}
 
 
 /**
@@ -34,13 +89,24 @@ int main (int argc, char *argv[])
 {
   NS_LOG_FUNCTION("Entrando en el método principal.");  
 
-  GlobalValue::Bind("ChecksumEnabled", BooleanValue(true)); // Fija el checksum a true.
-  Time::SetResolution (Time::US);   // Fijamos la resolución a microsegundos.
+  // Activa logging para las siguientes clases a los niveles que define la variable logLevel.
+
+  // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
+  // LogComponentEnable ("LteHelper", logLevel);
+  // LogComponentEnable ("EpcHelper", logLevel);
+  // LogComponentEnable ("EpcEnbApplication", logLevel);
+  // LogComponentEnable ("EpcX2", logLevel);
+  // LogComponentEnable ("EpcSgwPgwApplication", logLevel);
+  // LogComponentEnable ("LteEnbRrc", logLevel);
+  // LogComponentEnable ("LteEnbNetDevice", logLevel);
+  // LogComponentEnable ("LteUeRrc", logLevel);
+  // LogComponentEnable ("LteUeNetDevice", logLevel);
 
   // Parámetros de la simulación, con sus valores por defecto.
 
   uint16_t numberOfUes = 1;     // Número de nodos UE.
   uint16_t numberOfEnbs = 2;    // Número de nodos eNB.
+  uint16_t numBearersPerUe = 2;
   double simTime = 8.0;         // Tiempo de simulación.
   double distance = 100.0;      // Distancia entre nodos eNB.
 
@@ -48,9 +114,6 @@ int main (int argc, char *argv[])
   para que tengan valores razonables según el escenario planteado. Se hace antes de procesar
   los argumentos pasados por línea de comandos para que el usuario pueda cambiarlos si lo
   desea. */
-
-  Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
-  Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
 
   // Usará el modelo real para la señalización RRC (que añadirá pérdidas y tal, supongo).
 
@@ -169,7 +232,7 @@ int main (int argc, char *argv[])
   
   
   
-  /*                Instalar e iniciar las aplicaciones de los UEs y el remote host                */
+  /*                Instalar e iniciar las aplicaicones de los UEs y el remote host                */
   uint16_t dlPort = 10000;
   uint16_t ulPort = 20000;
 
@@ -180,8 +243,11 @@ int main (int argc, char *argv[])
   startTimeSeconds->SetAttribute ("Min", DoubleValue (1.0));
   startTimeSeconds->SetAttribute ("Max", DoubleValue (1.010));
 
-          ApplicationContainer clientApps;
-          ApplicationContainer serverApps;
+  /* Se ponen aquí las aplicaciones porque, de declararlas en el for, no se
+  podrían utilizar fuera del bucle. */
+
+  ApplicationContainer clientApps;
+  ApplicationContainer serverApps;
 
   // Se pone la aplicacion en cada UE
   // Comentario: Aun no entiendo muy bien como va lo de las aplicaciones
@@ -195,6 +261,8 @@ int main (int argc, char *argv[])
 
       // Este paso de poner el gateway lo hace en la línea 210-216. Habría que ver si se está repitiendo.
 
+      for (uint32_t b = 0; b < numBearersPerUe; ++b)
+        {
           /* Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
           de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
           calidad de servicio. */
@@ -207,19 +275,19 @@ int main (int argc, char *argv[])
           esto el downlink y uplink. */
 
           // APLICACION DOWNLINK: Acepta paquetes 
-          UdpClientHelper dlClientHelper (ueIpIfaces.GetAddress (u), dlPort);
+          BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(ueIpIfaces.GetAddress (u), dlPort));
           clientApps.Add (dlClientHelper.Install (remoteHost)); // downlink
           // Servidor recibe paquetes de cualquiera con PACKET SINK HELPER
-          PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
+          PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
           serverApps.Add (dlPacketSinkHelper.Install (ue));
           NS_LOG_LOGIC ("installing UDP UL app for UE " << u);
 
           // UPLINK: Envia paquetes
-          UdpClientHelper ulClientHelper (remoteHostAddr, ulPort);
+          BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(remoteHostAddr, ulPort));
           clientApps.Add (ulClientHelper.Install (ue)); // uplink
           // Se instala la aplicacion en el Servidor
-          PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
-          serverApps.Add (ulPacketSinkHelper.Install (remoteHost));          
+          PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
+          serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
           // Se implementa el mensajero TFT que comunica LTE con EPC
           Ptr<EpcTft> tft = Create<EpcTft> (); // Impliementa al mensajeto Traffic Flow Template de EPC
@@ -240,15 +308,16 @@ int main (int argc, char *argv[])
           Time startTime = Seconds (startTimeSeconds->GetValue ());
           serverApps.Start (startTime);
           clientApps.Start (startTime);
+        } // end for b
     }
 
   // Pone una interfaz X2 en el eNodeB para señalizacion entre eNodesB (Por ejemplo para tareas de handover)
   // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2.
     // Es una interfaz entre enb's para evitar pérdidas de paquetes por traspaso de ue's entre enb's. Vamos,
     // señalización.
-  
-  /*Postigo: Tengo entendido efectivamente que X2 es una interfaz que interconecta en forma de MALLA todos los 
-  enB, pero no tengo claro que sea PURA SEÑALIZACION, pues cuando se produce un traspaso (handover), lo que 
+
+  /*Postigo: Tengo entendido efectivamente que X2 es una interfaz que interconecta en forma de MALLA todos los
+  enB, pero no tengo claro que sea PURA SEÑALIZACION, pues cuando se produce un traspaso (handover), lo que
   esta interfaz permite es que los paquetes "que se hayan quedado en la anterior antena almacenados" puedan
   enviarse a traves de esta interfaz, luego mas que de señalizacion diria q es de DATOS */ 
   lteHelper->AddX2Interface (enbNodes);
@@ -256,8 +325,29 @@ int main (int argc, char *argv[])
   // Se establece una peticion de handover
   lteHelper->HandoverRequest (Seconds (0.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
 
+  // Descomentar la siguiente linea para capturar las trazas
+  //p2ph.EnablePcapAll("lena-x2-handover");
+  lteHelper->EnablePhyTraces ();
+  lteHelper->EnableMacTraces ();
+  lteHelper->EnableRlcTraces ();
+  lteHelper->EnablePdcpTraces ();
+
+  Ptr<RadioBearerStatsCalculator> rlcStats = lteHelper->GetRlcStats (); // Calculador de estadisticas del DL y UL
+  rlcStats->SetAttribute ("EpochDuration", TimeValue (Seconds (0.05))); // Se establece la duracion de la epoca
+
+  Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats (); // Calculador de estadisticas del DL y UL
+  pdcpStats->SetAttribute ("EpochDuration", TimeValue (Seconds (0.05))); // Se establece la duracion de la epoca
+
+  // Se capturan las trazas
+  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished", MakeCallback (&NotifyConnectionEstablishedEnb));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished", MakeCallback (&NotifyConnectionEstablishedUe));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart", MakeCallback (&NotifyHandoverStartEnb));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart", MakeCallback (&NotifyHandoverStartUe));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk", MakeCallback (&NotifyHandoverEndOkEnb));
+  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk", MakeCallback (&NotifyHandoverEndOkUe));
+
   Observador nodos_obs;
-  nodos_obs.CapturaTrazas(serverApps.Get(0), serverApps.Get(1)); 
+  nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
 
   // Se inicia el simulador
   Simulator::Stop (Seconds (simTime));
@@ -267,12 +357,9 @@ int main (int argc, char *argv[])
   // config.ConfigureAttributes ();
   Simulator::Destroy ();
 
-  double resultado = nodos_obs.DevuelvePorcentajeCorrectos1();
-  NS_LOG_UNCOND("Paquetes 1 correctos = " << resultado);
-  double resultado2 = nodos_obs.DevuelvePorcentajeCorrectos2();
-  NS_LOG_UNCOND("Paquetes 2 correctos = " << resultado2);
+  double resultado = nodos_obs.DevuelvePorcentajeCorrectos();
+  NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
 
   return 0;
 }
-
 
