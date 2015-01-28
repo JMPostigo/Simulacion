@@ -169,7 +169,7 @@ int main (int argc, char *argv[])
   
   
   
-  /*                Instalar e iniciar las aplicaicones de los UEs y el remote host                */
+  /*                Instalar e iniciar las aplicaciones de los UEs y el remote host                */
   uint16_t dlPort = 10000;
   uint16_t ulPort = 20000;
 
@@ -246,6 +246,11 @@ int main (int argc, char *argv[])
   // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2.
     // Es una interfaz entre enb's para evitar pérdidas de paquetes por traspaso de ue's entre enb's. Vamos,
     // señalización.
+  
+  /*Postigo: Tengo entendido efectivamente que X2 es una interfaz que interconecta en forma de MALLA todos los 
+  enB, pero no tengo claro que sea PURA SEÑALIZACION, pues cuando se produce un traspaso (handover), lo que 
+  esta interfaz permite es que los paquetes "que se hayan quedado en la anterior antena almacenados" puedan
+  enviarse a traves de esta interfaz, luego mas que de señalizacion diria q es de DATOS */ 
   lteHelper->AddX2Interface (enbNodes);
 
   // Se establece una peticion de handover
