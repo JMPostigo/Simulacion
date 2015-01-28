@@ -1,7 +1,12 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 /*
 *   By Ramón. He quitado todo el tratamiento de trazas. En este ejemplo, sólo trataré las de aplicación.
-*     DA VIOLACIÓN DE SEGMENTO. DEBO DEPURARLO.
+*     Ya he conseguido arreglarlo. Por lo pronto, he tenido que descartar el BulkSendApplication y el
+*     OnOffApplication, ya que daba problemas del tipo "intenta transmitir mientras transmite", y el
+*     UdpClient, al configurarle el tiempo entre transmisiones, no lo hace. Por eso, habrá que tirar
+*     al final por ese cliente (que no tiene trazas, por lo que sólo nos valen las de capas de enlace/física).
+*     Podría ser problema de usar los 2 bearer (lo cual no lo entiendo). He quitado 1, y con eso me va el UdpClient.
+*     Probaré mañana con los otros 2, Bulk y OnOff.
 *
 *   Activar todas las trazas: en línea de comandos -> export 'NS_LOG=p8_lte=level_all'
 */
@@ -36,7 +41,6 @@ int main (int argc, char *argv[])
 
   uint16_t numberOfUes = 1;     // Número de nodos UE.
   uint16_t numberOfEnbs = 2;    // Número de nodos eNB.
-  uint16_t numBearersPerUe = 2; // Tipos de tráfico que usa cada UE.
   double simTime = 8.0;         // Tiempo de simulación.
   double distance = 100.0;      // Distancia entre nodos eNB.
 
@@ -44,6 +48,9 @@ int main (int argc, char *argv[])
   para que tengan valores razonables según el escenario planteado. Se hace antes de procesar
   los argumentos pasados por línea de comandos para que el usuario pueda cambiarlos si lo
   desea. */
+
+  Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
+  Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
 
   // Usará el modelo real para la señalización RRC (que añadirá pérdidas y tal, supongo).
 
@@ -188,8 +195,6 @@ int main (int argc, char *argv[])
 
       // Este paso de poner el gateway lo hace en la línea 210-216. Habría que ver si se está repitiendo.
 
-      for (uint32_t b = 0; b < numBearersPerUe; ++b)
-        {
           /* Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
           de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
           calidad de servicio. */
@@ -199,25 +204,22 @@ int main (int argc, char *argv[])
           NS_LOG_LOGIC ("installing UDP DL app for UE " << u);
 
           /* Tanto el UE como el nodo remoto pueden transmitir y recibir tráfico. Es bidireccional. Por
-          esto el downlink y uplink. 
-          Para las trazas de aplicación voy a tomar el uplink (UE transmite, y el remoto recibe). Usar
-          client/serverApps.Get(1). */
+          esto el downlink y uplink. */
 
           // APLICACION DOWNLINK: Acepta paquetes 
-          BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(ueIpIfaces.GetAddress (u), dlPort));
+          UdpClientHelper dlClientHelper (ueIpIfaces.GetAddress (u), dlPort);
           clientApps.Add (dlClientHelper.Install (remoteHost)); // downlink
           // Servidor recibe paquetes de cualquiera con PACKET SINK HELPER
-          PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
+          PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
           serverApps.Add (dlPacketSinkHelper.Install (ue));
           NS_LOG_LOGIC ("installing UDP UL app for UE " << u);
 
           // UPLINK: Envia paquetes
-          BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(remoteHostAddr, ulPort));
+          UdpClientHelper ulClientHelper (remoteHostAddr, ulPort);
           clientApps.Add (ulClientHelper.Install (ue)); // uplink
           // Se instala la aplicacion en el Servidor
-          PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
-          serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
-          
+          PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
+          serverApps.Add (ulPacketSinkHelper.Install (remoteHost));          
 
           // Se implementa el mensajero TFT que comunica LTE con EPC
           Ptr<EpcTft> tft = Create<EpcTft> (); // Impliementa al mensajeto Traffic Flow Template de EPC
@@ -238,9 +240,6 @@ int main (int argc, char *argv[])
           Time startTime = Seconds (startTimeSeconds->GetValue ());
           serverApps.Start (startTime);
           clientApps.Start (startTime);
-
-        } // end for b
-
     }
 
   // Pone una interfaz X2 en el eNodeB para señalizacion entre eNodesB (Por ejemplo para tareas de handover)
@@ -253,7 +252,7 @@ int main (int argc, char *argv[])
   lteHelper->HandoverRequest (Seconds (0.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
 
   Observador nodos_obs;
-  nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
+  nodos_obs.CapturaTrazas(serverApps.Get(0), serverApps.Get(1)); 
 
   // Se inicia el simulador
   Simulator::Stop (Seconds (simTime));
@@ -263,8 +262,10 @@ int main (int argc, char *argv[])
   // config.ConfigureAttributes ();
   Simulator::Destroy ();
 
-  double resultado = nodos_obs.DevuelvePorcentajeCorrectos();
-  NS_LOG_UNCOND("Porcentaje correctos = " << resultado << " %");
+  double resultado = nodos_obs.DevuelvePorcentajeCorrectos1();
+  NS_LOG_UNCOND("Paquetes 1 correctos = " << resultado);
+  double resultado2 = nodos_obs.DevuelvePorcentajeCorrectos2();
+  NS_LOG_UNCOND("Paquetes 2 correctos = " << resultado2);
 
   return 0;
 }
