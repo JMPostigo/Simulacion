@@ -19,33 +19,31 @@ public:
   void Inicializa();
 
   /* Método de gestión de la traza de envío completo de un paquete por la aplicación origen. */
-  void GestionaTrazaRxApp1(Ptr <const Packet> p, const Address & direccion);
+  void GestionaTrazaTxApp(Ptr <const Packet> p);
 
   /* Método de gestión de la traza de recepción completa de un paquete en la aplicación
   destino. */
-  void GestionaTrazaRxApp2(Ptr <const Packet> p, const Address & direccion);
+  void GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion);
 
   // Método que captura las trazas consideradas.
-  void CapturaTrazas(Ptr<Application> rx1, Ptr<Application> rx2);
+  void CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx);
 
   // Método que devuelve el porcentaje de paquetes correctos en la aplicación destino.
-  double DevuelvePorcentajeCorrectos1();
-    double DevuelvePorcentajeCorrectos2();
-
+  double DevuelvePorcentajeCorrectos();
 
 private:
 
   // Aplicación transmisora en el escenario.
-  Ptr<Application> receptor_1;
+  Ptr<Application> transmisor;
 
   // Aplicación receptora en el escenario.
-  Ptr<Application> receptor_2;
+  Ptr<Application> receptor;
 
   // Paquetes enviados por la aplicación origen.
-  double pkts_recibidos1;
+  double pkts_enviados;
   
   // Paquetes recibidos por la aplicación destino.
-  double pkts_recibidos2;
+  double pkts_recibidos;
 
 
 };
