@@ -79,7 +79,9 @@ int main (int argc, char *argv[])
 	lte.AddDownlinkChannelRealization (enbMobility, ueMobility, ue->GetPhy ());
 
 
+	Simulator::Run ();
 
+	Simulator::Destroy ();
 
 	return 0;
 }
