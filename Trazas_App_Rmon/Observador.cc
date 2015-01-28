@@ -6,7 +6,7 @@
 #include "ns3/double.h"
 #include "ns3/application.h"
 #include "ns3/net-device.h"
-#include "ns3/bulk-send-application.h"
+#include "ns3/onoff-application.h"
 #include "ns3/packet-sink.h"
 #include "ns3/node.h"
 #include "ns3/packet.h"
@@ -36,63 +36,64 @@ void Observador::Inicializa() {
 
   // Inicializamos el valor de los atributos a 0.
 
-  transmisor=NULL;
-  receptor=NULL;
-  pkts_enviados=0;
-  pkts_recibidos=0;
-  porcentaje_correctos=0;
+  receptor_1=NULL;
+  receptor_2=NULL;
+  pkts_recibidos1=0;
+  pkts_recibidos2=0;
 
   NS_LOG_INFO("Fin del método Inicializa.");  
 }
 
 
-void Observador::GestionaTrazaTxApp(Ptr <const Packet> p) {
-  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaTxApp.");
-
-  // Como se ha enviado un paquete, incrementamos la variable de paquetes enviados.
-  pkts_enviados++;
-
-  // Trazamos la traza correspondiente al envío del paquete con nivel LOGIC.
-  NS_LOG_LOGIC("Paquete enviado por la aplicación origen número " << pkts_enviados);  
-
-  NS_LOG_INFO("Fin del método GestionaTrazaTxApp."); 
-}
-
-
-void Observador::GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion) {
+void Observador::GestionaTrazaRxApp1(Ptr <const Packet> p, const Address & direccion) {
   NS_LOG_FUNCTION("Entramos en el método GestionaTrazaRxApp.");
 
   /* Como ha llegado un paquete correcto a la aplicación destino, incrementamos el valor
   del contador de paquetes recibidos. */
 
-  pkts_recibidos++;
+  pkts_recibidos1++;
 
   // Trazamos la traza correspondiente a la recepción de octetos correctos con nivel LOGIC.
-  NS_LOG_LOGIC("Se han recibido " << p->GetSize() << " B. Llevamos: " << pkts_recibidos << " paquetes.");  
+  NS_LOG_LOGIC("Se han recibido " << p->GetSize() << " B. Llevamos: " << pkts_recibidos1 << " paquetes.");  
 
   NS_LOG_INFO("Fin del método GestionaTrazaRxApp.");  
 }
 
 
-void Observador::CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx) {
+void Observador::GestionaTrazaRxApp2(Ptr <const Packet> p, const Address & direccion) {
+  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaRxApp.");
+
+  /* Como ha llegado un paquete correcto a la aplicación destino, incrementamos el valor
+  del contador de paquetes recibidos. */
+
+  pkts_recibidos2++;
+
+  // Trazamos la traza correspondiente a la recepción de octetos correctos con nivel LOGIC.
+  NS_LOG_LOGIC("Se han recibido " << p->GetSize() << " B. Llevamos: " << pkts_recibidos2 << " paquetes.");  
+
+  NS_LOG_INFO("Fin del método GestionaTrazaRxApp.");  
+}
+
+
+void Observador::CapturaTrazas(Ptr<Application> rx1, Ptr<Application> rx2) {
   NS_LOG_FUNCTION("Entramos en el método CapturaTrazas.");
 
   /* Obtenemos las aplicaciones transmisora y receptora, para facilitar el trabajo de captura de
   trazas. Ambas se pasan como Application. */
 
-  transmisor = tx;
-  receptor = rx;
+  receptor_1 = rx1;
+  receptor_2 = rx2;
 
-  transmisor->GetObject<BulkSendApplication>()->TraceConnectWithoutContext("Tx", 
-                                            MakeCallback(&Observador::GestionaTrazaTxApp, this));     
-  receptor->GetObject<PacketSink>()->TraceConnectWithoutContext("Rx", 
-                                            MakeCallback(&Observador::GestionaTrazaRxApp, this));    
+  receptor_1->GetObject<PacketSink>()->TraceConnectWithoutContext("Rx", 
+                                            MakeCallback(&Observador::GestionaTrazaRxApp1, this));      
+  receptor_2->GetObject<PacketSink>()->TraceConnectWithoutContext("Rx", 
+                                            MakeCallback(&Observador::GestionaTrazaRxApp2, this));    
   
   NS_LOG_INFO("Fin del método CapturaTrazas.");  
 }
 
 
-double Observador::DevuelvePorcentajeCorrectos() {
+double Observador::DevuelvePorcentajeCorrectos1() {
   NS_LOG_FUNCTION("Entramos en el método DevuelvePorcentajeCorrectos.");
 
   /* Devolvemos el porcentaje de paquetes correctos, que serán los paquetes correctos
@@ -102,5 +103,20 @@ double Observador::DevuelvePorcentajeCorrectos() {
 
   NS_LOG_INFO("Devolviendo valor del método DevuelvePorcentajeCorrectos.");  
 
-  return (pkts_recibidos/pkts_enviados)*100;
+  //return (pkts_recibidos/pkts_enviados)*100;
+  return pkts_recibidos1;
+}
+
+double Observador::DevuelvePorcentajeCorrectos2() {
+  NS_LOG_FUNCTION("Entramos en el método DevuelvePorcentajeCorrectos.");
+
+  /* Devolvemos el porcentaje de paquetes correctos, que serán los paquetes correctos
+  recibidos en el receptor entre los paquetes enviados por el transmisor.
+
+  Notar que dicho porcentaje está en %; por eso, multiplicamos por 100. */
+
+  NS_LOG_INFO("Devolviendo valor del método DevuelvePorcentajeCorrectos.");  
+
+  //return (pkts_recibidos/pkts_enviados)*100;
+  return pkts_recibidos2;
 }
