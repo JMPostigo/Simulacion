@@ -1,11 +1,27 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+
+/*  PRÁCTICA 8. PLANIFICACIÓN Y SIMULACIÓN DE REDES
+*     ejemplo-EPC.cc
+*       -Ramón Pérez Hernández
+*       -José Manuel Postigo Aguilar
+*       -María Valero Campaña
+*
+*   Repositorio Git, con todo el proceso realizado:
+*       https://github.com/JMPostigo/Simulacion
+*
+*   Activar todas las trazas de interés: en línea de comandos -> 
+*       export 'NS_LOG=p8_lte=level_debug:Observador=level_warn'
+*
+*   Para información más detallada sobre el modelo, referenciamos la página:
+*       http://www.nsnam.org/docs/models/html/lte-design.html
+*/
+
 /*
-*   TODO: capturar trazas Tx y Rx para el EPC ,  Imprimir las estadisticas del PDCPStats tras la simulacion
+*   TODO: capturar trazas Tx y Rx para el EPC, Imprimir las estadisticas del PDCPStats tras la simulacion
 *   By Ramón. Funciona con UdpClient y con BulkSendApplication. Debería funcionar con OnOffApplication.
 *   Calcula el porcentaje de correctos perfectamente (sale, en su valor máximo, un 50%).
-*
-*   Activar todas las trazas: en línea de comandos -> export 'NS_LOG=p8_lte=level_all:Observador=level_all'
 */
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
@@ -17,12 +33,24 @@
 //#include "ns3/rlc-stats-calculator.h"
 #include "Observador.h"
 
+
+#define  N_UE                 2 // Valor por defecto del número de nodos UE.
+#define  N_ENB                2 // Valor por defecto del número de nodos eNB.
+#define  T_SIM             5.0 // Valor por defecto del tiempo de simulación.
+#define  DIST_NODOS       100.0 // Valor por defecto de la distancia entre nodos eNB.
+#define  NUM_REMOTOS          1 // Número de equipos remotos accesibles por los UE.
+#define  PTO_BAJADA       10000 // Puerto de subida.
+#define  PTO_SUBIDA       20000 // Puerto de bajada.
+
+
 using namespace ns3;
+
 
 NS_LOG_COMPONENT_DEFINE ("p8_lte");
 
 
-/*        Funciones que manejan las trazas RRC         */
+  /*        Funciones que manejan las trazas RRC.
+     Habría que modificar el cout por NS_LOG, y ponerlo en Observador, si acaso.    */
 void NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
 {
   std::cout << Simulator::Now ().GetSeconds () << " " << context
@@ -80,237 +108,300 @@ void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid
 }
 
 
-/**
- * Sample simulation script for a X2-based handover.
- * It instantiates two eNodeB, attaches one UE to the 'source' eNB and
- * triggers a handover of the UE towards the 'target' eNB.
- */
 int main (int argc, char *argv[])
 {
   NS_LOG_FUNCTION("Entrando en el método principal.");  
 
-  // Activa logging para las siguientes clases a los niveles que define la variable logLevel.
+      /* RAMÓN. Dejo esto, por si tenemos que coger alguna traza de aquí.
 
-  // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
-  // LogComponentEnable ("LteHelper", logLevel);
-  // LogComponentEnable ("EpcHelper", logLevel);
-  // LogComponentEnable ("EpcEnbApplication", logLevel);
-  // LogComponentEnable ("EpcX2", logLevel);
-  // LogComponentEnable ("EpcSgwPgwApplication", logLevel);
-  // LogComponentEnable ("LteEnbRrc", logLevel);
-  // LogComponentEnable ("LteEnbNetDevice", logLevel);
-  // LogComponentEnable ("LteUeRrc", logLevel);
-  // LogComponentEnable ("LteUeNetDevice", logLevel);
+      // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
+      // LogComponentEnable ("LteHelper", logLevel);
+      // LogComponentEnable ("EpcHelper", logLevel);
+      // LogComponentEnable ("EpcEnbApplication", logLevel);
+      // LogComponentEnable ("EpcX2", logLevel);
+      // LogComponentEnable ("EpcSgwPgwApplication", logLevel);
+      // LogComponentEnable ("LteEnbRrc", logLevel);
+      // LogComponentEnable ("LteEnbNetDevice", logLevel);
+      // LogComponentEnable ("LteUeRrc", logLevel);
+      // LogComponentEnable ("LteUeNetDevice", logLevel);
+      */
 
   // Parámetros de la simulación, con sus valores por defecto.
 
-  uint16_t numberOfUes = 1;     // Número de nodos UE.
-  uint16_t numberOfEnbs = 2;    // Número de nodos eNB.
-  uint16_t numBearersPerUe = 2;
-  double simTime = 8.0;         // Tiempo de simulación.
-  double distance = 100.0;      // Distancia entre nodos eNB.
+  uint16_t num_UEs = N_UE;              // Número de nodos UE.
+  uint16_t num_eNBs = N_ENB;            // Número de nodos eNB.
+  double t_simulacion = T_SIM;          // Tiempo de simulación.
+  double distancia_nodos = DIST_NODOS;  // Distancia entre nodo UE y eNB.
 
-  /* Se cambiarán algunos atributos por defecto de clases que se utilizarán en el código,
-  para que tengan valores razonables según el escenario planteado. Se hace antes de procesar
-  los argumentos pasados por línea de comandos para que el usuario pueda cambiarlos si lo
-  desea. */
+  /* Antes de procesar los argumentos pasados por línea de comandos, vamos a modificar
+  algunos atributos por defecto de clases que se utilizarán en el código para que tengan
+  valores razonables. Al hacerlo antes, el usuario podrá cambiarlo si lo desea (por línea
+  de comandos, por ejemplo). */
 
-  // Usará el modelo real para la señalización RRC (que añadirá pérdidas y tal, supongo).
+  // Usaremos el modelo real para la señalización RRC (de gestión de recursos radio).
 
   Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
 
-  /* Admitimos los parámetros de número de nodos UE, eNB y tiempo de simulación por línea
-  de comandos. */
+  // Admitimos los parámetros anteriores por línea de comandos.
 
   CommandLine cmd;
-  cmd.AddValue ("numberOfUes", "Número de nodos UE", numberOfUes);
-  cmd.AddValue ("numberOfEnbs", "Número de nodos eNB", numberOfEnbs);
-  cmd.AddValue ("simTime", "Duración total de la simulación (en segundos)", simTime);
+
+  cmd.AddValue ("num_UEs", "Número de nodos UE", num_UEs);
+  cmd.AddValue ("num_eNBs", "Número de nodos eNB", num_eNBs);
+  cmd.AddValue ("t_simulacion", "Duración total de la simulación (en segundos)", t_simulacion);
+  cmd.AddValue ("distancia_nodos", "Distancia entre nodo UE y eNB (en metros)", distancia_nodos);
+
   cmd.Parse (argc, argv);
 
   NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
-  
-  // Para la parte del LTE
+
+      // CONFIGURACIÓN DEL MODELO LTE (entre nodos UE y nodos eNB)
+
+  // En primer lugar, instanciamos el Helper para la parte LTE.
+
   Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
-  // La parte del epc. PointToPoint, usado en el EPC (ver diagrama de la documentación)
+
+  /* Instanciamos también el Helper para la parte EPC, que será punto a punto, para
+  luego asociarlo al Helper de LTE. */
+
   Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
-  // Se unen las dos partes
   lteHelper->SetEpcHelper (epcHelper);
-  // Planificador para los nodos eNB.
+
+  // Se utilizará un planificador para los nodos eNB basado en Round Robin.
+    // Aquí, igual, podría meterse modelo de error.
+
   lteHelper->SetSchedulerType ("ns3::RrFfMacScheduler");
-  // Se desabilita el traspaso automático (de hecho, no hace nada).
+
+  // Se deshabilita el traspaso automático de nodo eNB cuando un nodo UE se mueve.
+    // Tocar aquí para habilitar el movimiento de UE.
+
   lteHelper->SetHandoverAlgorithmType ("ns3::NoOpHandoverAlgorithm");
 
+  NS_LOG_INFO("Modelo LTE configurado.");
 
-  /*   PARTE DEL EPC  */
+      // CONFIGURACIÓN DEL MODELO EPC (entre nodos eNB y el encaminador (SGW/PGW) a Internet)
 
-  // Guardamos el nodo SGW/PGW que sera la pasarela a internet
+  // Guardamos el nodo SGW/PGW, que será la pasarela a Internet.
+
   Ptr<Node> pgw = epcHelper->GetPgwNode ();
 
-  // Se crea un host remoto
-  NodeContainer remoteHostContainer;
-  remoteHostContainer.Create (1);
-  Ptr<Node> remoteHost = remoteHostContainer.Get (0);
-  InternetStackHelper internet; // Mezcla rutas estáticas y globales, por defecto.
-  internet.Install (remoteHostContainer);
+  NS_LOG_INFO("Modelo EPC configurado.");
 
-  // Creamos la conexion a Internet
-  PointToPointHelper p2ph;
-  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
-  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
-  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+      // CONFIGURACIÓN DEL MODELO DE INTERNET (equipos accesibles a través de Internet)
+
+  /* Primero, generamos los nodos que serán accesibles por los nodos UE a través de
+  Internet. Para nuestro escenario, supondremos que sólo habrá un equipo.
+  Obtendremos el nodo de dicho equipo con el método Get del Container. */
+
+  NodeContainer nodosRemotos;
+  nodosRemotos.Create (NUM_REMOTOS);
+  Ptr<Node> equipoRemoto = nodosRemotos.Get (0);
   
-  // Se instalan sgw/pgw y remoteHost en Internet
-  /* Hay una conexión punto a punto entre el SGW/PGW y el equipo remoto. Se intenta modelar con un
-  enlace punto a punto con retardo. Puede parecer más o menos realista, pero la parte donde realmente
-  habría problemas de interferencias y tal es la parte LTE, luego veo bien el modelado de esta parte (si
-  acaso mirar más detenidamente si admite alguna configuración más para complementar) */
-  NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
-  Ipv4AddressHelper ipv4h;
-  ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
-  Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);
-  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1); // Para el cliente UDP.
-  // Routing of the Internet Host (towards the LTE network)
+  // Instalamos la pila TCP/IP en los nodos remotos.  
+
+  InternetStackHelper internet;
+  internet.Install (nodosRemotos);
+
+  /* A continuación, generamos el enlace que unirá el nodo SGW/PGW con el equipo remoto.
+  El acceso a dicho equipo se modelará con un enlace punto a punto, al que se le acumulará
+  cierto valor de retardo debido al paso por encaminadores intermedios. */
+
+  PointToPointHelper p2pInternet;
+  p2pInternet.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2pInternet.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2pInternet.SetChannelAttribute ("Delay", TimeValue (Seconds (0.020)));
+
+  /* Ahora, instanciamos el contenedor de NetDevice, que contendrán los 2 equipos conectados
+  en el enlace punto a punto: el encaminador SGW/PGW, y el equipo remoto.
+  Después, asignamos direcciones IP a los equipos del escenario. */
+
+  NetDeviceContainer equiposInternet = p2pInternet.Install (pgw, equipoRemoto);
+  Ipv4AddressHelper ipv4Internet;
+  ipv4Internet.SetBase ("1.0.0.0", "255.0.0.0");
+  Ipv4InterfaceContainer internetIpIfaces = ipv4Internet.Assign (equiposInternet);
+
+  // Guardamos la dirección del equipo remoto, para usarla al instanciar las aplicaciones cliente.
+
+  Ipv4Address dirEquipoRemoto = internetIpIfaces.GetAddress (1);
+
+  /* Para nuestro escenario, generaremos rutas estáticas en el equipo remoto hacia la
+  red LTE. 
+  El último parámetro del método que añade la ruta (AddNetworkRouteTo, cuando vale 1, 
+  indica que el siguiente salto es el otro equipo conectado al enlace punto a punto. */
+
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
-  Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
-  // interface 0 is localhost, 1 is the p2p device. Ruta para ese destino.
-  remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+  Ptr<Ipv4StaticRouting> rutaEstaticaEquipoRemoto = ipv4RoutingHelper.GetStaticRouting 
+                                                            (equipoRemoto->GetObject<Ipv4> ());
+  rutaEstaticaEquipoRemoto->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
+  NS_LOG_INFO("Modelo de Internet configurado.");
 
-  /*                     Parte del LTE                       */
+      // INSTALACIÓN Y CONFIGURACIÓN DE NODOS UE Y ENB
 
-  // Se crean los nodos UE y ENB
-  NodeContainer ueNodes;
-  NodeContainer enbNodes;
-  enbNodes.Create (numberOfEnbs);
-  ueNodes.Create (numberOfUes);
+  // Se generan los nodos UE y eNB a utilizar.
 
-  // Se establece el modelo de movilidad: estarán quietos sin moverse
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  for (uint16_t i = 0; i < numberOfEnbs; i++)
-    {
-      positionAlloc->Add (Vector (distance * 2 * i - distance, 0, 0));
-    }
-  for (uint16_t i = 0; i < numberOfUes; i++)
-    {
-      positionAlloc->Add (Vector (0, 0, 0));
-    }
-  MobilityHelper mobility;
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.SetPositionAllocator (positionAlloc);
-  mobility.Install (enbNodes);
-  mobility.Install (ueNodes);
-  /* Opino. Si van a estar quietos, bastaría con poner un nodo enb, porque si no se mueve,
-  nuncá habrá un traspaso del UE de un nodo enb a otro. Aunque habría que verlo en las
-  simulaciones. */
+  NodeContainer nodosUE;
+  NodeContainer nodoseNB;
+  nodoseNB.Create (num_eNBs);
+  nodosUE.Create (num_UEs);
 
-  // Install LTE Devices in eNB and UEs
-  NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
-  NetDeviceContainer ueLteDevs = lteHelper->InstallUeDevice (ueNodes);
+  NS_LOG_INFO("Nodos del modelo LTE generados.");
 
-  // Install the IP stack on the UEs
-  internet.Install (ueNodes);
+  /* A continuación, establecemos el modelo de movilidad de la parte LTE. En nuestro escenario,
+  colocaremos los nodos eNB separados a cierta distancia, de forma que los nodos UE colocados
+  estén en el punto intermedio de la línea que une a dos nodos eNB, a una distancia de valor
+  distancia_nodos de cada nodo eNB. 
+  Trabajaremos en 2 dimensiones. */
+
+  Ptr<ListPositionAllocator> posicionNodos = CreateObject<ListPositionAllocator> ();
+
+  for (uint16_t i = 0; i < num_eNBs; i++) {
+    posicionNodos->Add (Vector (distancia_nodos * 2 * i - distancia_nodos, 0, 0));
+  }
+
+  for (uint16_t i = 0; i < num_UEs; i++) {
+    posicionNodos->Add (Vector (0, 0, 0));
+  }
+
+  /* En nuestro escenario, los nodos estarán fijos en una posición. */
+
+  MobilityHelper modeloMovilidad;
+  modeloMovilidad.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  modeloMovilidad.SetPositionAllocator (posicionNodos);
+  modeloMovilidad.Install (nodoseNB);
+  modeloMovilidad.Install (nodosUE);
+
+  NS_LOG_INFO("Establecido modelo de movilidad del modelo LTE.");
+
+  /* Haciendo uso del LteHelper, instalamos los nodos UE y eNB en sus respectivos
+  contenedores de NetDevice. */
+
+  NetDeviceContainer dispLTEeNB = lteHelper->InstallEnbDevice (nodoseNB);
+  NetDeviceContainer dispLTE_UE = lteHelper->InstallUeDevice (nodosUE);
+
+  /* Instalamos la pila TCP/IP en los nodos UE, y les asignamos direcciones IP. La
+  generación de rutas y unión con nodos eNB se hará dentro del bucle que configura
+  las aplicaciones, para ser más cómodo. */
+
+  internet.Install (nodosUE);
   Ipv4InterfaceContainer ueIpIfaces;
-  ueIpIfaces = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueLteDevs));
+  ueIpIfaces = epcHelper->AssignUeIpv4Address (NetDeviceContainer (dispLTE_UE));
 
-  // Assign IP address to UEs, and install applications
-  for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
-    {
-      Ptr<Node> ueNode = ueNodes.Get (u);
-      // Set the default gateway for the UE
-      Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
-      ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-    }
+  NS_LOG_INFO("Direcciones de nodos UE configuradas.");
 
-  // Attach all UEs to the first eNodeB
-  for (uint16_t i = 0; i < numberOfUes; i++)
-    {
-      lteHelper->Attach (ueLteDevs.Get (i), enbLteDevs.Get (0));
-    }
+      // INSTALACIÓN DE APLICACIONES EN LOS EQUIPOS FINALES
 
-  NS_LOG_LOGIC ("setting up applications");
-  
-  
-  
-  /*                Instalar e iniciar las aplicaicones de los UEs y el remote host                */
-  uint16_t dlPort = 10000;
-  uint16_t ulPort = 20000;
+  /* Instanciamos los enteros que contendrán los puertos tanto para la conexión de subida
+  (del UE hacia fuera) como de bajada (de fuera hacia el UE). */
 
-  // Se hace aleatorio el inicio de la simulacion
-  // (e.g., buffer overflows due to packet transmissions happening
-  // exactly at the same time)
-  Ptr<UniformRandomVariable> startTimeSeconds = CreateObject<UniformRandomVariable> ();
-  startTimeSeconds->SetAttribute ("Min", DoubleValue (1.0));
-  startTimeSeconds->SetAttribute ("Max", DoubleValue (1.010));
+  uint16_t pto_bajada = PTO_BAJADA;
+  uint16_t pto_subida = PTO_SUBIDA;
 
   /* Se ponen aquí las aplicaciones porque, de declararlas en el for, no se
   podrían utilizar fuera del bucle. */
 
-  ApplicationContainer clientApps;
-  ApplicationContainer serverApps;
+  ApplicationContainer appsCliente;
+  ApplicationContainer appsServidor;
 
-  // Se pone la aplicacion en cada UE
-  // Comentario: Aun no entiendo muy bien como va lo de las aplicaciones
-  for (uint32_t u = 0; u < numberOfUes; ++u)
-    {
-      Ptr<Node> ue = ueNodes.Get (u);
+  /* Entramos en el bucle de generación de aplicaciones, además de fijar las rutas en los UE
+  para salir a Internet, junto a la unión de nodos UE al nodo eNB que le corresponda. */
 
-      // Ponemos como  gateway el pgw
-      Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ue->GetObject<Ipv4> ());
-      ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+  for (uint32_t i = 0; i < num_UEs; i++) {
+    /* Generamos las rutas estáticas para cada nodo UE. La única ruta a generar será la salida
+    por defecto hacia el router que da acceso a los equipos remotos a través de Internet. 
+    Tras ello, fijamos cada nodo UE al primer nodo eNB instalado. */
 
-      // Este paso de poner el gateway lo hace en la línea 210-216. Habría que ver si se está repitiendo.
+    Ptr<Node> nodoUE = nodosUE.Get (i);
+    Ptr<Ipv4StaticRouting> rutaEstaticaUE = ipv4RoutingHelper.GetStaticRouting (nodoUE->GetObject<Ipv4> ());
+    rutaEstaticaUE->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
 
-      for (uint32_t b = 0; b < numBearersPerUe; ++b)
-        {
-          /* Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
-          de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
-          calidad de servicio. */
-          ++dlPort;
-          ++ulPort;
+    lteHelper->Attach (dispLTE_UE.Get (i), dispLTEeNB.Get (0));
 
-          NS_LOG_LOGIC ("installing UDP DL app for UE " << u);
+    NS_LOG_INFO("Nodos UE configurados y unidos a su nodo eNB.");
 
-          /* Tanto el UE como el nodo remoto pueden transmitir y recibir tráfico. Es bidireccional. Por
-          esto el downlink y uplink. */
+    /* Tanto el UE como el nodo remoto pueden transmitir y recibir tráfico. Es bidireccional. Por
+    esto, utilizaremos tráfico ascendente y descendente. */
 
-          // APLICACION DOWNLINK: Acepta paquetes 
-          BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(ueIpIfaces.GetAddress (u), dlPort));
-          clientApps.Add (dlClientHelper.Install (remoteHost)); // downlink
-          // Servidor recibe paquetes de cualquiera con PACKET SINK HELPER
-          PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
-          serverApps.Add (dlPacketSinkHelper.Install (ue));
-          NS_LOG_LOGIC ("installing UDP UL app for UE " << u);
+        // TRÁFICO DESCENDENTE. El equipo remoto es emisor, y los UE receptores.
 
-          // UPLINK: Envia paquetes
-          BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory", InetSocketAddress(remoteHostAddr, ulPort));
-          clientApps.Add (ulClientHelper.Install (ue)); // uplink
-          // Se instala la aplicacion en el Servidor
-          PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
-          serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
+    /* En este caso, la aplicación emisora será el equipo remoto, que necesitará la dirección y puerto
+    de cada UE (supondremos que todos los UE utilizan el mismo puerto de escucha). 
+    La aplicación receptora estará en los nodos UE. */
 
-          // Se implementa el mensajero TFT que comunica LTE con EPC
-          Ptr<EpcTft> tft = Create<EpcTft> (); // Impliementa al mensajeto Traffic Flow Template de EPC
-          // Downlink
-          EpcTft::PacketFilter dlpf;
-          dlpf.localPortStart = dlPort;
-          dlpf.localPortEnd = dlPort;
-          tft->Add (dlpf);
-          // Uplink
-          EpcTft::PacketFilter ulpf;
-          ulpf.remotePortStart = ulPort;
-          ulpf.remotePortEnd = ulPort;
-          tft->Add (ulpf);
 
-          // Mensajero
-          EpsBearer bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
-          lteHelper->ActivateDedicatedEpsBearer (ueLteDevs.Get (u), bearer, tft); // Activa el envio de UE a Internet
-          Time startTime = Seconds (startTimeSeconds->GetValue ());
-          serverApps.Start (startTime);
-          clientApps.Start (startTime);
-        } // end for b
+    BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory", 
+                                      InetSocketAddress(ueIpIfaces.GetAddress (i), pto_bajada));
+    appsCliente.Add (dlClientHelper.Install (equipoRemoto));
+
+    PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory", 
+                                      InetSocketAddress (Ipv4Address::GetAny (), pto_bajada));
+    appsServidor.Add (dlPacketSinkHelper.Install (nodoUE));
+
+    NS_LOG_INFO("Configuradas aplicaciones de tráfico descendente.");
+
+        // TRÁFICO ASCENDENTE. Los nodos UE son emisores, y el tráfico lo recibe el equipo remoto.
+
+    /* Ahora, la aplicación emisora estará en los nodos UE. Necesitarán la dirección y puerto del
+    equipo remoto. Vemos que se utilizará el mismo puerto para recibir el tráfico de todos los
+    nodos UE, luego sólo hará falta una aplicación en el nodo remoto. Por ello, sólo la instanciamos
+    para la primera iteración del bucle. */
+
+    BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory", 
+                                      InetSocketAddress(dirEquipoRemoto, pto_subida));
+    appsCliente.Add (ulClientHelper.Install (nodoUE));
+
+        // PROBLEMA. Tengo que ver cómo determinar quién envía cada paquete.
+    if (i == 0) {
+      PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", 
+                                      InetSocketAddress (Ipv4Address::GetAny (), pto_subida));
+      appsServidor.Add (ulPacketSinkHelper.Install (equipoRemoto));
     }
 
+    NS_LOG_INFO("Configuradas aplicaciones de tráfico ascendente.");
+
+        // PROBLEMA. Esto no sirve para nada. No hace efecto.
+    /*    Un "bearer", según he estado leyendo, es una especie de túnel entre UE y SGW, que dice el tipo
+    de tráfico que estás enviando (datos, voz, vídeo, etc.), y se le puede dar o no también cierta
+    calidad de servicio.
+
+    // Se implementa el mensajero TFT que comunica LTE con EPC
+    Ptr<EpcTft> tft = Create<EpcTft> (); // Impliementa al mensajeto Traffic Flow Template de EPC
+    // Downlink
+    EpcTft::PacketFilter dlpf;
+    dlpf.localPortStart = pto_bajada;
+    dlpf.localPortEnd = pto_bajada;
+    tft->Add (dlpf);
+    // Uplink
+    EpcTft::PacketFilter ulpf;
+    ulpf.remotePortStart = pto_subida;
+    ulpf.remotePortEnd = pto_subida;
+    tft->Add (ulpf);
+
+    // Mensajero
+    EpsBearer bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
+    EpsBearer bearer2 (EpsBearer::NGBR_VIDEO_TCP_PREMIUM);
+
+    if (i==0)
+      lteHelper->ActivateDedicatedEpsBearer (dispLTE_UE.Get (i), bearer, tft); // Activa el envio de UE a Internet
+    else
+      lteHelper->ActivateDedicatedEpsBearer (dispLTE_UE.Get (i), bearer2, tft); // Activa el envio de UE a Internet
+      */
+    }
+
+  /* Por último, fijamos el instante de inicio para las aplicaciones, determinado según una
+  distribución aleatoria uniforme, con un rango de valores para el valor mínimo y máximo. */
+
+  Ptr<UniformRandomVariable> startTimeSeconds = CreateObject<UniformRandomVariable> ();
+  startTimeSeconds->SetAttribute ("Min", DoubleValue (1.0));
+  startTimeSeconds->SetAttribute ("Max", DoubleValue (1.010));
+
+  Time startTime = Seconds (startTimeSeconds->GetValue ());
+  appsServidor.Start (startTime);
+  appsCliente.Start (startTime);  
+
+  NS_LOG_INFO("Aplicaciones configuradas.");
+
+      // COMENTARIOS INTERFAZ X2 (POR VER)
   // Pone una interfaz X2 en el eNodeB para señalizacion entre eNodesB (Por ejemplo para tareas de handover)
   // Comentario: la verdad es que no entiendo muy bien para que sirve lo del X2.
     // Es una interfaz entre enb's para evitar pérdidas de paquetes por traspaso de ue's entre enb's. Vamos,
@@ -320,13 +411,15 @@ int main (int argc, char *argv[])
   enB, pero no tengo claro que sea PURA SEÑALIZACION, pues cuando se produce un traspaso (handover), lo que
   esta interfaz permite es que los paquetes "que se hayan quedado en la anterior antena almacenados" puedan
   enviarse a traves de esta interfaz, luego mas que de señalizacion diria q es de DATOS */ 
-  lteHelper->AddX2Interface (enbNodes);
+  lteHelper->AddX2Interface (nodoseNB);
 
-  // Se establece una peticion de handover
-  lteHelper->HandoverRequest (Seconds (0.100), ueLteDevs.Get (0), enbLteDevs.Get (0), enbLteDevs.Get (1));
+  // Se establece la petición de traspaso al segundo nodo eNB.
+
+  lteHelper->HandoverRequest (Seconds (0.100), dispLTE_UE.Get (0), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
+  lteHelper->HandoverRequest (Seconds (0.100), dispLTE_UE.Get (1), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
 
   // Descomentar la siguiente linea para capturar las trazas
-  //p2ph.EnablePcapAll("lena-x2-handover");
+  //p2pInternet.EnablePcapAll("lena-x2-handover.pcap");
   lteHelper->EnablePhyTraces ();
   lteHelper->EnableMacTraces ();
   lteHelper->EnableRlcTraces ();
@@ -347,10 +440,10 @@ int main (int argc, char *argv[])
   Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk", MakeCallback (&NotifyHandoverEndOkUe));
 
   Observador nodos_obs;
-  nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
+  nodos_obs.CapturaTrazas(appsCliente.Get(1), appsServidor.Get(1)); 
 
   // Se inicia el simulador
-  Simulator::Stop (Seconds (simTime));
+  Simulator::Stop (Seconds (t_simulacion));
   Simulator::Run ();
 
   // GtkConfigStore config;
@@ -362,4 +455,5 @@ int main (int argc, char *argv[])
 
   return 0;
 }
+
 
