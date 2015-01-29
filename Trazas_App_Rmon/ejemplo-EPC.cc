@@ -30,6 +30,7 @@
 #include "ns3/applications-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/config-store-module.h"
+#include "ns3/error-model.h"
 //#include "ns3/rlc-stats-calculator.h"
 #include "Observador.h"
 
@@ -141,6 +142,7 @@ int main (int argc, char *argv[])
   // Usaremos el modelo real para la señalización RRC (de gestión de recursos radio).
 
   Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
+  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue ("ns3::LogDistancePropagationLossModel"));
 
   // Admitimos los parámetros anteriores por línea de comandos.
 
@@ -234,6 +236,17 @@ int main (int argc, char *argv[])
                                                             (equipoRemoto->GetObject<Ipv4> ());
   rutaEstaticaEquipoRemoto->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
+  /* Por último, vamos a configurar un modelo de errores para nuestro modelo de Internet, de manera
+  que tendremos un porcentaje del 95% de paquetes correctos. 
+    TODAVÍA NO FUNCIONA
+
+  Ptr<RateErrorModel> error_tx_pkt = CreateObject<RateErrorModel> ();
+  error_tx_pkt->SetRate(0.05);
+  error_tx_pkt->SetUnit(RateErrorModel::ERROR_UNIT_PACKET);
+
+  equiposInternet.Get(0)->GetObject<PointToPointNetDevice>()->SetReceiveErrorModel(error_tx_pkt);
+  equiposInternet.Get(1)->GetObject<PointToPointNetDevice>()->SetReceiveErrorModel(error_tx_pkt); */
+
   NS_LOG_INFO("Modelo de Internet configurado.");
 
       // INSTALACIÓN Y CONFIGURACIÓN DE NODOS UE Y ENB
@@ -326,8 +339,9 @@ int main (int argc, char *argv[])
 
     /* En este caso, la aplicación emisora será el equipo remoto, que necesitará la dirección y puerto
     de cada UE (supondremos que todos los UE utilizan el mismo puerto de escucha). 
-    La aplicación receptora estará en los nodos UE. */
-
+    La aplicación receptora estará en los nodos UE. Vemos que, aunque se use siempre el mismo
+    puerto, la correspondencia IP-puerto es unívoca (la IP sí varía), luego no hace falta cambiar
+    el puerto. */
 
     BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory", 
                                       InetSocketAddress(ueIpIfaces.GetAddress (i), pto_bajada));
@@ -342,20 +356,17 @@ int main (int argc, char *argv[])
         // TRÁFICO ASCENDENTE. Los nodos UE son emisores, y el tráfico lo recibe el equipo remoto.
 
     /* Ahora, la aplicación emisora estará en los nodos UE. Necesitarán la dirección y puerto del
-    equipo remoto. Vemos que se utilizará el mismo puerto para recibir el tráfico de todos los
-    nodos UE, luego sólo hará falta una aplicación en el nodo remoto. Por ello, sólo la instanciamos
-    para la primera iteración del bucle. */
+    equipo remoto. Vemos que tendremos una aplicación en el equipo remoto por cada UE que le
+    transmita paquetes. Por ello, tras instanciar el sumidero, incrementamos el valor del puerto, 
+    para que la aplicación de los siguientes UE usen un puerto distinto. */
 
     BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory", 
                                       InetSocketAddress(dirEquipoRemoto, pto_subida));
     appsCliente.Add (ulClientHelper.Install (nodoUE));
 
-        // PROBLEMA. Tengo que ver cómo determinar quién envía cada paquete.
-    if (i == 0) {
-      PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", 
-                                      InetSocketAddress (Ipv4Address::GetAny (), pto_subida));
-      appsServidor.Add (ulPacketSinkHelper.Install (equipoRemoto));
-    }
+    PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory", 
+                                      InetSocketAddress (Ipv4Address::GetAny (), pto_subida++));
+    appsServidor.Add (ulPacketSinkHelper.Install (equipoRemoto));
 
     NS_LOG_INFO("Configuradas aplicaciones de tráfico ascendente.");
 
