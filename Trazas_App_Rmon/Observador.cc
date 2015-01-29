@@ -1,16 +1,22 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-// Observador.cc . Por Ramón Pérez Hernández.
+/* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+
+/*  PRÁCTICA 8. PLANIFICACIÓN Y SIMULACIÓN DE REDES
+*     Observador.cc
+*       -Ramón Pérez Hernández
+*       -José Manuel Postigo Aguilar
+*       -María Valero Campaña
+*/
 
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/double.h"
 #include "ns3/application.h"
-#include "ns3/net-device.h"
 #include "ns3/bulk-send-application.h"
 #include "ns3/packet-sink.h"
-#include "ns3/node.h"
 #include "ns3/packet.h"
 #include "Observador.h"
+
+#define  CONV_PORCENTAJE    100 // Factor de conversión de tanto por uno a %.
 
 using namespace ns3;
 
@@ -48,8 +54,8 @@ void Observador::Inicializa() {
 void Observador::GestionaTrazaTxApp(Ptr <const Packet> p) {
   NS_LOG_FUNCTION("Entramos en el método GestionaTrazaTxApp.");
 
-  /* Como se ha transmitido un paquete correctamente desde la aplicación origen, se incrementa
-  el contador de paquetes enviados. */
+  /* Como se ha transmitido un paquete desde la aplicación origen, se incrementa el 
+  contador de paquetes enviados. */
 
   pkts_enviados++;
 
@@ -78,16 +84,22 @@ void Observador::GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direcc
 void Observador::CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx) {
   NS_LOG_FUNCTION("Entramos en el método CapturaTrazas.");
 
-  /* Obtenemos las aplicaciones transmisora y receptora, para facilitar el trabajo de captura de
-  trazas. Ambas se pasan como Application. */
+  /* Obtenemos las aplicaciones transmisora y receptora, para facilitar el trabajo 
+  de captura de trazas. Ambas se pasan como Application. */
 
   transmisor = tx;
   receptor = rx;
 
+  /* Las trazas a considerar serán: 
+  -Tx (en BulkSendApplication), para detectar la transmisión de los paquetes enviados 
+  por la aplicación origen.
+  -Rx (en PacketSink), para detectar la recepción de los paquetes que llegan correctamente 
+  a la aplicación destino. */
+
   transmisor->GetObject<BulkSendApplication>()->TraceConnectWithoutContext("Tx", 
-                                            MakeCallback(&Observador::GestionaTrazaTxApp, this));      
+                                    MakeCallback(&Observador::GestionaTrazaTxApp, this));      
   receptor->GetObject<PacketSink>()->TraceConnectWithoutContext("Rx", 
-                                            MakeCallback(&Observador::GestionaTrazaRxApp, this));    
+                                    MakeCallback(&Observador::GestionaTrazaRxApp, this));    
   
   NS_LOG_INFO("Fin del método CapturaTrazas.");  
 }
@@ -97,11 +109,12 @@ double Observador::DevuelvePorcentajeCorrectos() {
   NS_LOG_FUNCTION("Entramos en el método DevuelvePorcentajeCorrectos.");
 
   /* Devolvemos el porcentaje de paquetes correctos, que serán los paquetes correctos
-  recibidos en el receptor entre los paquetes enviados por el transmisor.
+  recibidos en la aplicación destino entre los paquetes enviados por la aplicación
+  transmisora.
 
   Notar que dicho porcentaje está en %; por eso, multiplicamos por 100. */
 
   NS_LOG_INFO("Devolviendo valor del método DevuelvePorcentajeCorrectos.");  
 
-  return (pkts_recibidos/pkts_enviados)*100;
+  return (pkts_recibidos/pkts_enviados)*CONV_PORCENTAJE;
 }

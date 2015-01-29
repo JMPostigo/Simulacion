@@ -1,5 +1,11 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-// Observador.h . Por Ramón Pérez Hernández.
+/* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
+
+/*  PRÁCTICA 8. PLANIFICACIÓN Y SIMULACIÓN DE REDES
+*     Observador.h
+*       -Ramón Pérez Hernández
+*       -José Manuel Postigo Aguilar
+*       -María Valero Campaña
+*/
 
 #include "ns3/application.h"
 #include "ns3/packet.h"
@@ -18,11 +24,12 @@ public:
   // Método para resetear los atributos del observador.
   void Inicializa();
 
-  /* Método de gestión de la traza de envío completo de un paquete por la aplicación origen. */
+  /* Método de gestión de la traza de envío completo de un paquete por la 
+  aplicación origen. */
   void GestionaTrazaTxApp(Ptr <const Packet> p);
 
-  /* Método de gestión de la traza de recepción completa de un paquete en la aplicación
-  destino. */
+  /* Método de gestión de la traza de recepción completa de un paquete en la
+  aplicación destino. */
   void GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion);
 
   // Método que captura las trazas consideradas.
@@ -44,6 +51,5 @@ private:
   
   // Paquetes recibidos por la aplicación destino.
   double pkts_recibidos;
-
 
 };
