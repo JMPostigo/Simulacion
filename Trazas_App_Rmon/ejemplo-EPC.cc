@@ -35,11 +35,13 @@
 #include "Observador.h"
 
 
-#define  N_UE                 2 // Valor por defecto del número de nodos UE.
-#define  N_ENB                2 // Valor por defecto del número de nodos eNB.
-#define  T_SIM             5.0 // Valor por defecto del tiempo de simulación.
+#define  NUM_UE               2 // Número de nodos UE (fijo).
+#define  NUM_ENB              2 // Número de nodos eNB (fijo).
+#define  NUM_REMOTOS          1 // Número de equipos remotos accesibles por los UE (fijo).
+#define  T_SIM              5.0 // Valor por defecto del tiempo de simulación.
 #define  DIST_NODOS       100.0 // Valor por defecto de la distancia entre nodos eNB.
-#define  NUM_REMOTOS          1 // Número de equipos remotos accesibles por los UE.
+#define  NUM_ITERACIONES      5 /* Valor por defecto del número de iteraciones por cada 
+                                   punto de la gráfica. */
 #define  PTO_BAJADA       10000 // Puerto de subida.
 #define  PTO_SUBIDA       20000 // Puerto de bajada.
 
@@ -109,54 +111,11 @@ void NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid
 }
 
 
-int main (int argc, char *argv[])
-{
-  NS_LOG_FUNCTION("Entrando en el método principal.");  
 
-      /* RAMÓN. Dejo esto, por si tenemos que coger alguna traza de aquí.
 
-      // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
-      // LogComponentEnable ("LteHelper", logLevel);
-      // LogComponentEnable ("EpcHelper", logLevel);
-      // LogComponentEnable ("EpcEnbApplication", logLevel);
-      // LogComponentEnable ("EpcX2", logLevel);
-      // LogComponentEnable ("EpcSgwPgwApplication", logLevel);
-      // LogComponentEnable ("LteEnbRrc", logLevel);
-      // LogComponentEnable ("LteEnbNetDevice", logLevel);
-      // LogComponentEnable ("LteUeRrc", logLevel);
-      // LogComponentEnable ("LteUeNetDevice", logLevel);
-      */
-
-  // Parámetros de la simulación, con sus valores por defecto.
-
-  uint16_t num_UEs = N_UE;              // Número de nodos UE.
-  uint16_t num_eNBs = N_ENB;            // Número de nodos eNB.
-  double t_simulacion = T_SIM;          // Tiempo de simulación.
-  double distancia_nodos = DIST_NODOS;  // Distancia entre nodo UE y eNB.
-
-  /* Antes de procesar los argumentos pasados por línea de comandos, vamos a modificar
-  algunos atributos por defecto de clases que se utilizarán en el código para que tengan
-  valores razonables. Al hacerlo antes, el usuario podrá cambiarlo si lo desea (por línea
-  de comandos, por ejemplo). */
-
-  // Usaremos el modelo real para la señalización RRC (de gestión de recursos radio).
-
-  Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
-  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue ("ns3::LogDistancePropagationLossModel"));
-
-  // Admitimos los parámetros anteriores por línea de comandos.
-
-  CommandLine cmd;
-
-  cmd.AddValue ("num_UEs", "Número de nodos UE", num_UEs);
-  cmd.AddValue ("num_eNBs", "Número de nodos eNB", num_eNBs);
-  cmd.AddValue ("t_simulacion", "Duración total de la simulación (en segundos)", t_simulacion);
-  cmd.AddValue ("distancia_nodos", "Distancia entre nodo UE y eNB (en metros)", distancia_nodos);
-
-  cmd.Parse (argc, argv);
-
-  NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
-
+double RealizaSimulacion(double t_simulacion, double distancia_nodos) {
+  NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
+ 
       // CONFIGURACIÓN DEL MODELO LTE (entre nodos UE y nodos eNB)
 
   // En primer lugar, instanciamos el Helper para la parte LTE.
@@ -255,8 +214,8 @@ int main (int argc, char *argv[])
 
   NodeContainer nodosUE;
   NodeContainer nodoseNB;
-  nodoseNB.Create (num_eNBs);
-  nodosUE.Create (num_UEs);
+  nodoseNB.Create (NUM_ENB);
+  nodosUE.Create (NUM_UE);
 
   NS_LOG_INFO("Nodos del modelo LTE generados.");
 
@@ -268,11 +227,11 @@ int main (int argc, char *argv[])
 
   Ptr<ListPositionAllocator> posicionNodos = CreateObject<ListPositionAllocator> ();
 
-  for (uint16_t i = 0; i < num_eNBs; i++) {
+  for (uint16_t i = 0; i < NUM_ENB; i++) {
     posicionNodos->Add (Vector (distancia_nodos * 2 * i - distancia_nodos, 0, 0));
   }
 
-  for (uint16_t i = 0; i < num_UEs; i++) {
+  for (uint16_t i = 0; i < NUM_UE; i++) {
     posicionNodos->Add (Vector (0, 0, 0));
   }
 
@@ -319,7 +278,7 @@ int main (int argc, char *argv[])
   /* Entramos en el bucle de generación de aplicaciones, además de fijar las rutas en los UE
   para salir a Internet, junto a la unión de nodos UE al nodo eNB que le corresponda. */
 
-  for (uint32_t i = 0; i < num_UEs; i++) {
+  for (uint32_t i = 0; i < NUM_UE; i++) {
     /* Generamos las rutas estáticas para cada nodo UE. La única ruta a generar será la salida
     por defecto hacia el router que da acceso a los equipos remotos a través de Internet. 
     Tras ello, fijamos cada nodo UE al primer nodo eNB instalado. */
@@ -426,8 +385,8 @@ int main (int argc, char *argv[])
 
   // Se establece la petición de traspaso al segundo nodo eNB.
 
-  lteHelper->HandoverRequest (Seconds (0.100), dispLTE_UE.Get (0), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
-  lteHelper->HandoverRequest (Seconds (0.100), dispLTE_UE.Get (1), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
+  lteHelper->HandoverRequest (Seconds (2), dispLTE_UE.Get (0), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
+  lteHelper->HandoverRequest (Seconds (4), dispLTE_UE.Get (1), dispLTEeNB.Get (0), dispLTEeNB.Get (1));
 
   // Descomentar la siguiente linea para capturar las trazas
   //p2pInternet.EnablePcapAll("lena-x2-handover.pcap");
@@ -461,10 +420,70 @@ int main (int argc, char *argv[])
   // config.ConfigureAttributes ();
   Simulator::Destroy ();
 
-  double resultado = nodos_obs.DevuelvePorcentajeCorrectos();
-  NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
+  double resultado_sim = nodos_obs.DevuelvePorcentajeCorrectos();
 
-  return 0;
+  NS_LOG_INFO("Devolviendo valor del método RealizaSimulacion.");  
+
+  return resultado_sim;
 }
 
 
+
+
+int main (int argc, char *argv[])
+{
+  NS_LOG_FUNCTION("Entrando en el método principal.");  
+
+      /* RAMÓN. Dejo esto, por si tenemos que coger alguna traza de aquí.
+
+      // LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_LEVEL_ALL);
+      // LogComponentEnable ("LteHelper", logLevel);
+      // LogComponentEnable ("EpcHelper", logLevel);
+      // LogComponentEnable ("EpcEnbApplication", logLevel);
+      // LogComponentEnable ("EpcX2", logLevel);
+      // LogComponentEnable ("EpcSgwPgwApplication", logLevel);
+      // LogComponentEnable ("LteEnbRrc", logLevel);
+      // LogComponentEnable ("LteEnbNetDevice", logLevel);
+      // LogComponentEnable ("LteUeRrc", logLevel);
+      // LogComponentEnable ("LteUeNetDevice", logLevel);
+      */
+
+  // Parámetros de la simulación, con sus valores por defecto.
+
+  double t_simulacion = T_SIM;            // Tiempo de simulación.
+  double distancia_nodos = DIST_NODOS;    // Distancia entre nodo UE y eNB.
+  uint32_t iteraciones = NUM_ITERACIONES; // Número de iteraciones por punto de la gráfica.
+
+  /* Antes de procesar los argumentos pasados por línea de comandos, vamos a modificar
+  algunos atributos por defecto de clases que se utilizarán en el código para que tengan
+  valores razonables. Al hacerlo antes, el usuario podrá cambiarlo si lo desea (por línea
+  de comandos, por ejemplo). */
+
+  // Usaremos el modelo real para la señalización RRC (de gestión de recursos radio).
+
+  Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
+
+  // Usamos un modelo exponencial para las pérdidas en propagación en el radioenlace.
+
+  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue ("ns3::LogDistancePropagationLossModel"));
+
+  // Admitimos los parámetros anteriores por línea de comandos.
+
+  CommandLine cmd;
+
+  cmd.AddValue ("t_simulacion", "Duración total de la simulación (en segundos)", t_simulacion);
+  cmd.AddValue ("distancia_nodos", "Distancia entre nodo UE y eNB (en metros)", distancia_nodos);
+  cmd.AddValue ("iteraciones", "Número de iteraciones por punto de la gráfica", iteraciones);
+
+  cmd.Parse (argc, argv);
+
+  NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
+
+  for (uint32_t i = 0; i < iteraciones; i++) {
+    double resultado = RealizaSimulacion(t_simulacion, distancia_nodos);
+
+    NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
+  }
+
+  return 0;
+}
