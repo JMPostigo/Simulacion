@@ -257,9 +257,16 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 	
   // Se conectan los UE al ENB0
   //lteHelper->Attach (ueLteDevs.Get (0), henbLteDevs.Get (1));
-  for (uint16_t i = 0; i <     n_ues; i++)	
-    {	
-      lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (0));
+  for (uint16_t i = 0; i <  n_ues; i++)	
+    {
+      if (i != (n_ues-1))
+      	{	
+      		lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (0));
+      	}
+      else
+  	{
+      		lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (1));
+	}
     }
 	
   NS_LOG_LOGIC ("Establecemos las aplicaciones en los UE");
@@ -474,7 +481,7 @@ main (int argc, char *argv[])
 
   NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
 
-  for (uint32_t i = 1; i <= iteraciones; i++) {
+  for (uint32_t i = 10; i <= iteraciones; i++) {
      NS_LOG_UNCOND("distancia: " << distancia_Enbs*i); 
     double resultado = RealizaSimulacion(t_simulacion, distancia_Enbs*i);
 
@@ -488,4 +495,3 @@ main (int argc, char *argv[])
 	
   return 0;
 }
-
