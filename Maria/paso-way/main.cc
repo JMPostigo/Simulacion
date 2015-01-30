@@ -1,9 +1,4 @@
 /*
-* Modificacion del ejemplo way  
-* El observador de ramon da error cuando se usa
-**/
-
-/*
 *       PyS   -   Practica8
 *     Maria
 *     Ramon
@@ -64,7 +59,6 @@ NS_LOG_COMPONENT_DEFINE("myX2-MultiUes5-TrialHandover");
 /*       Funcion que monitoriza el flujo de los UE             */
 void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
   {	
-    double tempThroughput;
     flowMon->CheckForLostPackets(); 
     std::map<FlowId, FlowMonitor::FlowStats> flowStats = flowMon->GetFlowStats();
     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (fmhelper->GetClassifier());
@@ -73,15 +67,12 @@ void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
       {	
 	// A tuple: Source-ip, destination-ip, protocol, source-port, destination-port
 	Ipv4FlowClassifier::FiveTuple fiveTuple = classifier->FindFlow (stats->first);
-	std::cout<<"Flow ID: " << stats->first <<" ; "<< fiveTuple.sourceAddress <<" -----> "<<fiveTuple.destinationAddress<<std::endl;
-	std::cout<<"Tx Packets = " << stats->second.txPackets<<std::endl;
-	std::cout<<"Rx Packets = " << stats->second.rxPackets<<std::endl;
-	std::cout<<"Duration: "<<stats->second.timeLastRxPacket.GetSeconds() - stats->second.timeFirstTxPacket.GetSeconds()<<std::endl;
-	std::cout<<"Last Received Packet: "<< stats->second.timeLastRxPacket.GetSeconds()<<" Seconds"<<std::endl;
-	
-	tempThroughput = stats->second.rxBytes * 8.0 / (stats->second.timeLastRxPacket.GetSeconds()-stats->second.timeFirstTxPacket.GetSeconds())/1024;
-	std::cout<<"Throughput: " << tempThroughput  << " Kbps"<<std::endl;
-	std::cout<<"------------------------------------------"<<std::endl;
+	NS_LOG_INFO("Flow ID: " << stats->first <<" ; "<< fiveTuple.sourceAddress <<" -----> "<<fiveTuple.destinationAddress);
+	NS_LOG_INFO("Tx Packets = " << stats->second.txPackets);
+	NS_LOG_INFO("Rx Packets = " << stats->second.rxPackets);
+	NS_LOG_INFO("Duration: "<<stats->second.timeLastRxPacket.GetSeconds() - stats->second.timeFirstTxPacket.GetSeconds());
+	NS_LOG_INFO("Last Received Packet: "<< stats->second.timeLastRxPacket.GetSeconds()<<" Seconds");
+	NS_LOG_INFO("------------------------------------------");
       }	
     Simulator::Schedule(Seconds(1),&MonitorizadorFlujo, fmhelper, flowMon);
     
@@ -94,10 +85,10 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
 
   
-  uint16_t   n_ues = 2;
-  uint16_t  n_enb = 6;	
+  uint16_t   n_ues = 3;
+  uint16_t  n_enb = 2;	
   uint16_t bearersPorUE = 1;
-  double velocidad = 10;	// velocidad del UE en m/s
+  double velocidad = 2*distancia_Enbs/20;	// velocidad del UE en m/s
     
 
 
@@ -187,10 +178,10 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 	
   /**  Establecemos el modelo de mobilidad   
   *
-  *                (UE1)          
+  *            (UE1)	      (UE2)          
   *                       
-  *    (UE0)   ENB0           ENB1           ENB2  
-  *                <--d_Enb-->    <--d_Enb-->      
+  *    (UE0)   ENB0           ENB1  
+  *                <--d_Enb-->          
   *
   **/
 
@@ -211,7 +202,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
     {
       ueMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
       ueMobility.Install (nodosUE.Get (i));
-      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  distancia_Enbs * (i + 0.2), 0.2*(  distancia_Enbs), 0));
+      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  distancia_Enbs * i , 50, 0));
     }
   
   /*
@@ -392,18 +383,18 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 
   // Imprime el retraso
   for (int j = 0;j<2;j++) {
-        NS_LOG_UNCOND ("  ----  Ue: " << j << " ----- " );
+        NS_LOG_INFO ("  ----  Ue: " << j << " ----- " );
                 
         for (int i = 3; i<5; i++) {
                 uint64_t imsi = ueLteDevs.Get (j)->GetObject<LteUeNetDevice> ()->GetImsi ();
                 std::vector< double > stats = lteHelper->GetPdcpStats()->GetDlDelayStats(imsi,i); // imsi, lcid
   
-                NS_LOG_UNCOND ("DL:" << i << ":  avg Dl delay (in seconds) of target UE = " << stats[0] / 1.0e+9 );
-                NS_LOG_UNCOND ("DL:" << i << ":  std dev Dl delay (in seconds) of target UE = " << stats[1] / 1.0e+9 );  
-                NS_LOG_UNCOND ("DL:" << i << ":  min Dl delay (in seconds) of target UE = " << stats[2] / 1.0e+9 );
-                NS_LOG_UNCOND ("DL:" << i << ":  max Dl delay (in seconds) of target UE = " << stats[3] / 1.0e+9 );
-                NS_LOG_UNCOND ("DL:" << i << ":  Paquetes enviados: " <<  lteHelper->GetPdcpStats()->GetDlTxPackets (imsi,i)  << " -- Paquetes recibidos: " << lteHelper->GetPdcpStats()->GetDlRxPackets (imsi,i) );
-                NS_LOG_UNCOND ("UL:" << i << ":  Paquetes enviados: " <<  lteHelper->GetPdcpStats()->GetUlTxPackets (imsi,i)  << " -- Paquetes recibidos: " << lteHelper->GetPdcpStats()->GetUlRxPackets (imsi,i) );
+                NS_LOG_INFO ("DL:" << i << ":  avg Dl delay (in seconds) of target UE = " << stats[0] / 1.0e+9 );
+                NS_LOG_INFO ("DL:" << i << ":  std dev Dl delay (in seconds) of target UE = " << stats[1] / 1.0e+9 );  
+                NS_LOG_INFO ("DL:" << i << ":  min Dl delay (in seconds) of target UE = " << stats[2] / 1.0e+9 );
+                NS_LOG_INFO ("DL:" << i << ":  max Dl delay (in seconds) of target UE = " << stats[3] / 1.0e+9 );
+                NS_LOG_INFO ("DL:" << i << ":  Paquetes enviados: " <<  lteHelper->GetPdcpStats()->GetDlTxPackets (imsi,i)  << " -- Paquetes recibidos: " << lteHelper->GetPdcpStats()->GetDlRxPackets (imsi,i) );
+                NS_LOG_INFO ("UL:" << i << ":  Paquetes enviados: " <<  lteHelper->GetPdcpStats()->GetUlTxPackets (imsi,i)  << " -- Paquetes recibidos: " << lteHelper->GetPdcpStats()->GetUlRxPackets (imsi,i) );
 
         }
   }
@@ -422,7 +413,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 
 
 /* 
- * Se simulan 3 EnB fijos, 1 UE fijo y 1 UE que se mueve a velocidad constante
+ * Se simulan 2 EnB fijos, 2 UE fijo y 1 UE que se mueve a velocidad constante
  * Se usará un algoritmo de handover automatico para el UE movil 
  * También se priorizara el trafico del UE movil frente al UE fijo
  *
@@ -436,8 +427,8 @@ main (int argc, char *argv[])
 { 
 
   /**  Variables  ***/
-    double distancia_Enbs = 240;	// Distancia en metros
-    double t_simulacion = 50.0;
+    double distancia_Enbs = 100;	// Distancia en metros
+    double t_simulacion = 20.0;
     //double simTime = (double) ((  n_enb + 1) * distancia_Enbs / velocidad); // Tiempo de simulacion
     
     double potenciaEnb = 20;
@@ -445,7 +436,7 @@ main (int argc, char *argv[])
     double potenciaUe = 20;
     double ruidoUe = 8;
      
-    uint32_t iteraciones = 1;
+    uint32_t iteraciones = 100;
 
   /** Configuracion por defecto  **/
 
@@ -483,8 +474,9 @@ main (int argc, char *argv[])
 
   NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
 
-  for (uint32_t i = 0; i < iteraciones; i++) {
-    double resultado = RealizaSimulacion(t_simulacion, distancia_Enbs);
+  for (uint32_t i = 1; i <= iteraciones; i++) {
+     NS_LOG_UNCOND("distancia: " << distancia_Enbs*i); 
+    double resultado = RealizaSimulacion(t_simulacion, distancia_Enbs*i);
 
     NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
   }
@@ -496,5 +488,4 @@ main (int argc, char *argv[])
 	
   return 0;
 }
-
 
