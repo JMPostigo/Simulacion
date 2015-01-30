@@ -143,7 +143,8 @@ NotifyHandoverEndOkEnb (std::string context,
 }
 
 
-void ThroughputMonitor (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
+/*       Funcion que monitoriza el flujo de los UE             */
+void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
   {	
     double tempThroughput;
     flowMon->CheckForLostPackets(); 
@@ -164,10 +165,10 @@ void ThroughputMonitor (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
 	std::cout<<"Throughput: " << tempThroughput  << " Kbps"<<std::endl;
 	std::cout<<"------------------------------------------"<<std::endl;
       }	
-    Simulator::Schedule(Seconds(1),&ThroughputMonitor, fmhelper, flowMon);
+    Simulator::Schedule(Seconds(1),&MonitorizadorFlujo, fmhelper, flowMon);
     
     // Write results to an XML file
-    flowMon->SerializeToXmlFile ("ThroughputMonitor.xml", true, true);
+    flowMon->SerializeToXmlFile ("MonitorizadorFlujo.xml", true, true);
   }
 
 
@@ -175,7 +176,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
 
   
-  uint16_t   n_ues = 6;
+  uint16_t   n_ues = 2;
   uint16_t  n_enb = 6;	
   uint16_t bearersPorUE = 1;
   double velocidad = 10;	// velocidad del UE en m/s
@@ -241,7 +242,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   InternetStackHelper internet;
   internet.Install (hostRemotoContainer);
 	
-  // Ponemosel servidor remoto en Internet
+  // Ponemos el servidor remoto en Internet
   PointToPointHelper p2ph;
   p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));	
   p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));		
@@ -266,7 +267,16 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   nodosENB.Create (n_enb);
 
 	
-  /**  Establecemos el modelo de mobilidad   **/
+  /**  Establecemos el modelo de mobilidad   
+  *
+  *                (UE1)          
+  *                       
+  *    (UE0)   ENB0           ENB1           ENB2  
+  *                <--d_Enb-->    <--d_Enb-->      
+  *
+  **/
+
+
   MobilityHelper ueMobility;
   MobilityHelper henbMobility;
 	
@@ -277,24 +287,24 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
    */
   ueMobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
   ueMobility.Install (nodosUE.Get (0));
-  nodosUE.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (0,   distancia_Enbs, 0));
+  nodosUE.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (distancia_Enbs*0.8,0, 0));
   nodosUE.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (  velocidad, 0, 0));
   for (uint16_t i = 1; i <     n_ues; i++)
     {
       ueMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
       ueMobility.Install (nodosUE.Get (i));
-      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  distancia_Enbs * (i + 0.2), 1.2*(  distancia_Enbs), 0));
+      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  distancia_Enbs * (i + 0.2), 0.2*(  distancia_Enbs), 0));
     }
   
   /*
    * Modelo de movilidad para los ENB: todos son fijos
    */
   Ptr<ListPositionAllocator> HenbPositionAlloc = CreateObject<ListPositionAllocator> ();
-  Vector henbPosition (  distancia_Enbs * (4),   distancia_Enbs * (3.8), 0);
-  HenbPositionAlloc->Add (henbPosition);
-  for (uint16_t i = 1; i <    n_enb; i++)
+  //Vector henbPosition (  distancia_Enbs * (4),   distancia_Enbs * (3.8), 0);
+  //HenbPositionAlloc->Add (henbPosition);
+  for (uint16_t i = 1; i <=  n_enb; i++)
     {
-      Vector henbPosition (  distancia_Enbs * (i),   distancia_Enbs, 0);
+      Vector henbPosition (  distancia_Enbs * (i), 0, 0);
       HenbPositionAlloc->Add (henbPosition);
     }
   henbMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -336,11 +346,11 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
     }
 	
-  // Ponemos cada UE conectado a un eNB
-  lteHelper->Attach (ueLteDevs.Get (0), henbLteDevs.Get (1));
-  for (uint16_t i = 1; i <     n_ues; i++)	
+  // Se conectan los UE al ENB0
+  //lteHelper->Attach (ueLteDevs.Get (0), henbLteDevs.Get (1));
+  for (uint16_t i = 0; i <     n_ues; i++)	
     {	
-      lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (i));
+      lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (0));
     }
 	
   NS_LOG_LOGIC ("Establecemos las aplicaciones en los UE");
@@ -374,18 +384,24 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 					
 	  // Config UDP Downlink
           NS_LOG_LOGIC ("Installing UDP Downlink Application(s) for UE " << u);
-          UdpClientHelper dlClientHelper (ueIpInterface.GetAddress (u), dlPuerto);
+
+	  BulkSendHelper dlClientHelper ("ns3::TcpSocketFactory",          InetSocketAddress(ueIpInterface.GetAddress (u), dlPuerto));
           clientApps.Add (dlClientHelper.Install (hostRemoto));
-          PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPuerto));
-          serverApps.Add (dlPacketSinkHelper.Install (ue));	
+          PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory",InetSocketAddress (Ipv4Address::GetAny (), dlPuerto));
+          serverApps.Add (dlPacketSinkHelper.Install (ue));
+
+          NS_LOG_INFO("Configuradas aplicaciones de tráfico descendente.");
+
 
 	  // Config UDP Uplink
-          NS_LOG_LOGIC ("Installing UDP Uplink Application(s) for UE " << u);
-          UdpClientHelper ulClientHelper (hostRemotoAddr, ulPuerto);	// IP address: 1.0.0.1/8
+          BulkSendHelper ulClientHelper ("ns3::TcpSocketFactory",InetSocketAddress(hostRemotoAddr, ulPuerto));
           clientApps.Add (ulClientHelper.Install (ue));
-          PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPuerto));
+          PacketSinkHelper ulPacketSinkHelper ("ns3::TcpSocketFactory",InetSocketAddress (Ipv4Address::GetAny (), ulPuerto++));
           serverApps.Add (ulPacketSinkHelper.Install (hostRemoto));
 
+          NS_LOG_INFO("Configuradas aplicaciones de tráfico ascendente.");
+		
+	
 	  // Filter downlink local port
           Ptr<EpcTft> tft = Create<EpcTft> ();
           EpcTft::PacketFilter dlpf;
@@ -407,8 +423,8 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
           Time startSimTime = Seconds (startSimTimeSeconds->GetValue ());
           serverApps.Start (startSimTime);
           clientApps.Start (startSimTime);
-        } // end for b (index b)
     }
+  }
 		
   // Se aniade la interfaz X2
   lteHelper->AddX2Interface (nodosENB);
@@ -438,14 +454,14 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
                    MakeCallback (&NotifyHandoverEndOkUe));
 
-/*
-*  Da violación de segmento no se por que
+
+  //*  Da violación de segmento no se por que
+  Observador nodos_obs;
   if (bearersPorUE >= 1)
   {
-    Observador nodos_obs;
     nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
   }
-*/
+
 
  
   
@@ -464,7 +480,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   Ptr<FlowMonitor> monitor;
   //monitor = fmhelper.InstallAll();
   monitor = fmhelper.Install (flowMon_nodes);
-  ThroughputMonitor (&fmhelper, monitor);
+  MonitorizadorFlujo (&fmhelper, monitor);
   
   Simulator::Run ();
 
@@ -487,8 +503,8 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
         }
   }
   
-  //double resultado_sim = nodos_obs.DevuelvePorcentajeCorrectos();
-    double resultado_sim = 0;
+  double resultado_sim = nodos_obs.DevuelvePorcentajeCorrectos();
+  //  double resultado_sim = 0;
 
 	
   // End simulation
@@ -501,11 +517,12 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 
 
 /* 
- * In this simulation, I want to create a topology with 5 HeNBs and only one UE. The UE trajectory
- * is known in advance and handover algorithm is automatically performed using the existing algorithms
+ * Se simulan 3 EnB fijos, 1 UE fijo y 1 UE que se mueve a velocidad constante
+ * Se usará un algoritmo de handover automatico para el UE movil 
+ * También se priorizara el trafico del UE movil frente al UE fijo
  *
- * From results will be obtained, I will investigate my proposed algorithm and then competitive
- * results will be compared with others.
+ * Se investigara la distancia optima entre las antenas y donde se pierden mas paquetes
+ * Se compararan los resultados del UE fijo y el UE movil
  */
 
 
@@ -527,32 +544,39 @@ main (int argc, char *argv[])
 
   /** Configuracion por defecto  **/
 
-    // Se modifican algunos atributos para el escenario
-    Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
-    Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
-    Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
-    Config::SetDefault("ns3::LteEnbPhy::TxPower", DoubleValue (potenciaEnb));
-    Config::SetDefault("ns3::LteEnbPhy::NoiseFigure", DoubleValue (ruidoEnb));
-    Config::SetDefault("ns3::LteUePhy::TxPower", DoubleValue (potenciaUe));
-    Config::SetDefault("ns3::LteUePhy::NoiseFigure", DoubleValue (ruidoUe));
+  /* Antes de procesar los argumentos pasados por línea de comandos, vamos a modificar
+  algunos atributos por defecto de clases que se utilizarán en el código para que tengan
+  valores razonables. Al hacerlo antes, el usuario podrá cambiarlo si lo desea (por línea
+  de comandos, por ejemplo). */
+
+  // Usaremos el modelo real para la señalización RRC (de gestión de recursos radio).
+
+  Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
+
+  // Usamos un modelo exponencial para las pérdidas en propagación en el radioenlace.
+
+  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue ("ns3::LogDistancePropagationLossModel"));
+
+  // Se modifican algunos atributos para las antenas como la potencia y el ruido
+  Config::SetDefault ("ns3::UdpClient::Interval", TimeValue (MilliSeconds (10)));
+  Config::SetDefault ("ns3::UdpClient::MaxPackets", UintegerValue (1000000));
+  Config::SetDefault ("ns3::LteHelper::UseIdealRrc", BooleanValue (false));
+  Config::SetDefault("ns3::LteEnbPhy::TxPower", DoubleValue (potenciaEnb));
+  Config::SetDefault("ns3::LteEnbPhy::NoiseFigure", DoubleValue (ruidoEnb));
+  Config::SetDefault("ns3::LteUePhy::TxPower", DoubleValue (potenciaUe));
+  Config::SetDefault("ns3::LteUePhy::NoiseFigure", DoubleValue (ruidoUe));
 	  
-    // Command line arguments
-    CommandLine cmd;
-    //cmd.AddValue ("  n_ues", "Number of UEs",   n_ues);
-    //cmd.AddValue (" n_enb", "Number of HeNBs",  n_enb);
-    //cmd.AddValue ("bearersPorUE", "Number of Bearers per UE", bearersPorUE);
-    //cmd.AddValue ("potenciaEnb", "Transmission default power of a HeNB", potenciaEnb);
-    //cmd.AddValue ("potenciaEnb0", "Transmission default power of an eNB", potenciaEnb0);
-    //cmd.AddValue ("potenciaUe", "Transmission default power of an UE", potenciaUe);
-    //cmd.AddValue ("velocidad", "Speed of UE", velocidad);
-    cmd.AddValue ("distancia_Enbs", "Distance between two adjacent HeNBs", distancia_Enbs);
-    cmd.AddValue ("t_simulacion", "Total duration of the simulation", t_simulacion);
-    cmd.Parse (argc, argv);
+  // Command line arguments
+  CommandLine cmd;
+  cmd.AddValue ("distancia_Enbs", "Distance between two adjacent HeNBs", distancia_Enbs);
+  cmd.AddValue ("t_simulacion", "Total duration of the simulation", t_simulacion);
+  cmd.Parse (argc, argv);
+
     
     
-    std::cout << "Configuracion de parametros terminado" << std::endl;
-  
-    NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
+  std::cout << "Configuracion de parametros terminado" << std::endl;
+
+  NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
 
   for (uint32_t i = 0; i < iteraciones; i++) {
     double resultado = RealizaSimulacion(t_simulacion, distancia_Enbs);
