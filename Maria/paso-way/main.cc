@@ -60,88 +60,6 @@ using std::vector;
 
 NS_LOG_COMPONENT_DEFINE("myX2-MultiUes5-TrialHandover");
 
-void
-NotifyConnectionEstablishedUe (std::string context,
-                               uint64_t imsi,
-                               uint16_t cellid,
-                               uint16_t rnti)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << Simulator::Now ().GetSeconds () << " " << context
-            << " UE IMSI " << imsi
-            << ": connected to CellId " << cellid
-            << " with RNTI " << rnti
-            << std::endl;
-}
-
-void
-NotifyHandoverStartUe (std::string context,
-                       uint64_t imsi,
-                       uint16_t cellid,
-                       uint16_t rnti,
-                       uint16_t targetCellId)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << " UE IMSI " << imsi
-            << ": previously connected to CellId " << cellid
-            << " with RNTI " << rnti
-            << ", doing handover to CellId " << targetCellId
-            << std::endl;
-}
-
-void
-NotifyHandoverEndOkUe (std::string context,
-                       uint64_t imsi,
-                       uint16_t cellid,
-                       uint16_t rnti)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << " UE IMSI " << imsi
-            << ": successful handover to CellId " << cellid
-            << " with RNTI " << rnti
-            << std::endl;
-}
-
-void
-NotifyConnectionEstablishedEnb (std::string context,
-                                uint64_t imsi,
-                                uint16_t cellid,
-                                uint16_t rnti)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << " eNB CellId " << cellid
-            << ": successful connection of UE with IMSI " << imsi
-            << " RNTI " << rnti
-            << std::endl;
-}
-
-void
-NotifyHandoverStartEnb (std::string context,
-                        uint64_t imsi,
-                        uint16_t cellid,
-                        uint16_t rnti,
-                        uint16_t targetCellId)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << " eNB CellId " << cellid
-            << ": start handover of UE with IMSI " << imsi
-            << " RNTI " << rnti
-            << " to CellId " << targetCellId
-            << std::endl;
-}
-
-void
-NotifyHandoverEndOkEnb (std::string context,
-                        uint64_t imsi,
-                        uint16_t cellid,
-                        uint16_t rnti)
-{
-  std::cout << Simulator::Now ().GetSeconds () << " " << context
-            << " eNB CellId " << cellid
-            << ": completed handover of UE with IMSI " << imsi
-            << " RNTI " << rnti
-            << std::endl;
-}
-
 
 /*       Funcion que monitoriza el flujo de los UE             */
 void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
@@ -440,26 +358,13 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   Ptr<RadioBearerStatsCalculator> pdcpStats = lteHelper->GetPdcpStats ();
   pdcpStats->SetAttribute ("EpochDuration", TimeValue (Seconds (1.0)));
 	
-  // Capturamos algunas trazas
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
-                   MakeCallback (&NotifyConnectionEstablishedEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
-                   MakeCallback (&NotifyConnectionEstablishedUe));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart",
-                   MakeCallback (&NotifyHandoverStartEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart",
-                   MakeCallback (&NotifyHandoverStartUe));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk",
-                   MakeCallback (&NotifyHandoverEndOkEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
-                   MakeCallback (&NotifyHandoverEndOkUe));
-
 
   //*  Da violación de segmento no se por que
   Observador nodos_obs;
   if (bearersPorUE >= 1)
   {
-    nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
+    //  void CapturaTrazas(Ptr<Application>, Ptr<Application>, Ptr<LteUeNetDevice> ,Ptr<NetDevice>, Ptr<NetDevice>);
+    nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1), DynamicCast<LteUeNetDevice> (ueLteDevs.Get(0)),internetDevices.Get (0), internetDevices.Get (1)); 
   }
 
 
@@ -489,7 +394,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   for (int j = 0;j<2;j++) {
         NS_LOG_UNCOND ("  ----  Ue: " << j << " ----- " );
                 
-        for (int i = 0; i<10; i++) {
+        for (int i = 3; i<5; i++) {
                 uint64_t imsi = ueLteDevs.Get (j)->GetObject<LteUeNetDevice> ()->GetImsi ();
                 std::vector< double > stats = lteHelper->GetPdcpStats()->GetDlDelayStats(imsi,i); // imsi, lcid
   
@@ -591,4 +496,5 @@ main (int argc, char *argv[])
 	
   return 0;
 }
+
 
