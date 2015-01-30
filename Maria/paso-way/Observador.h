@@ -1,4 +1,3 @@
-
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
 
 /*  PRÁCTICA 8. PLANIFICACIÓN Y SIMULACIÓN DE REDES
@@ -12,6 +11,11 @@
 #include "ns3/packet.h"
 #include "ns3/address.h"
 #include "ns3/double.h"
+
+#include "ns3/net-device.h"
+#include "ns3/lte-enb-net-device.h"
+#include "ns3/lte-ue-net-device.h"
+#include "ns3/lte-ue-rrc.h"
 
 using namespace ns3;
 
@@ -34,7 +38,18 @@ public:
   void GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion);
 
   // Método que captura las trazas consideradas.
-  void CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx);
+  void CapturaTrazas(Ptr<Application>, Ptr<Application>, Ptr<LteUeNetDevice> , Ptr<NetDevice>, Ptr<NetDevice>);
+
+  //
+  void PacketReceive(Ptr<const Packet> p);
+  //
+  void PacketSend(Ptr<const Packet> p);
+  //
+  void NotifyHandoverEnd (uint64_t imsi, uint16_t cellid, uint16_t rnti);
+  //
+  void NotifyHandoverStart (uint64_t imsi, uint16_t cellid, uint16_t rnti, uint16_t targetCellId);
+  //
+  void Conexion( uint64_t imsi, uint16_t cellid, uint16_t rnti);
 
   // Método que devuelve el porcentaje de paquetes correctos en la aplicación destino.
   double DevuelvePorcentajeCorrectos();
@@ -52,11 +67,12 @@ private:
 
   // Aplicación receptora en el escenario.
   Ptr<Application> receptor;
-
-
+ 
+  //
+  uint64_t mac_paquetesRecibidos; 
+  //
+  uint64_t mac_paquetesEnviados;
 
 };
-
-
 
 
