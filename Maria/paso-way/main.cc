@@ -143,7 +143,7 @@ NotifyHandoverEndOkEnb (std::string context,
 }
 
 
-void ThroughputMonitor (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon, Gnuplot2dDataset dataset)
+void ThroughputMonitor (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
   {	
     double tempThroughput;
     flowMon->CheckForLostPackets(); 
@@ -163,10 +163,8 @@ void ThroughputMonitor (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon, G
 	tempThroughput = stats->second.rxBytes * 8.0 / (stats->second.timeLastRxPacket.GetSeconds()-stats->second.timeFirstTxPacket.GetSeconds())/1024;
 	std::cout<<"Throughput: " << tempThroughput  << " Kbps"<<std::endl;
 	std::cout<<"------------------------------------------"<<std::endl;
-	
-	dataset.Add((double)stats->first,(double) tempThroughput);
       }	
-    Simulator::Schedule(Seconds(1),&ThroughputMonitor, fmhelper, flowMon, dataset);
+    Simulator::Schedule(Seconds(1),&ThroughputMonitor, fmhelper, flowMon);
     
     // Write results to an XML file
     flowMon->SerializeToXmlFile ("ThroughputMonitor.xml", true, true);
@@ -237,29 +235,29 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   Ptr<Node> pgw = epcHelper->GetPgwNode ();
 	
   // Creamos un host Remoto
-  NodeContainer hosRemotoContainer;
-  hosRemotoContainer.Create (1);
-  Ptr<Node> hosRemoto = hosRemotoContainer.Get (0);
+  NodeContainer hostRemotoContainer;
+  hostRemotoContainer.Create (1);
+  Ptr<Node> hostRemoto = hostRemotoContainer.Get (0);
   InternetStackHelper internet;
-  internet.Install (hosRemotoContainer);
+  internet.Install (hostRemotoContainer);
 	
   // Ponemosel servidor remoto en Internet
   PointToPointHelper p2ph;
   p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));	
   p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));		
   p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));	
-  NetDeviceContainer internetDevices = p2ph.Install (pgw, hosRemoto);	// Se conecta al pgw
+  NetDeviceContainer internetDevices = p2ph.Install (pgw, hostRemoto);	// Se conecta al pgw
   // Se pone la direccion de internet
   Ipv4AddressHelper ipv4h;
   ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
   Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);	
   // Guardamos la direccion del servidor
-  Ipv4Address hosRemotoAddr = internetIpIfaces.GetAddress (1);
+  Ipv4Address hostRemotoAddr = internetIpIfaces.GetAddress (1);
 	
   // Se establecen las rutas para internet
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
-  Ptr<Ipv4StaticRouting> hosRemotoStaticRouting = ipv4RoutingHelper.GetStaticRouting (hosRemoto->GetObject<Ipv4> ());
-  hosRemotoStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+  Ptr<Ipv4StaticRouting> hostRemotoStaticRouting = ipv4RoutingHelper.GetStaticRouting (hostRemoto->GetObject<Ipv4> ());
+  hostRemotoStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
   
   // Creamos los nodos ue y enb
   NodeContainer nodosUE;
@@ -377,16 +375,16 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 	  // Config UDP Downlink
           NS_LOG_LOGIC ("Installing UDP Downlink Application(s) for UE " << u);
           UdpClientHelper dlClientHelper (ueIpInterface.GetAddress (u), dlPuerto);
-          clientApps.Add (dlClientHelper.Install (hosRemoto));
+          clientApps.Add (dlClientHelper.Install (hostRemoto));
           PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPuerto));
           serverApps.Add (dlPacketSinkHelper.Install (ue));	
 
 	  // Config UDP Uplink
           NS_LOG_LOGIC ("Installing UDP Uplink Application(s) for UE " << u);
-          UdpClientHelper ulClientHelper (hosRemotoAddr, ulPuerto);	// IP address: 1.0.0.1/8
+          UdpClientHelper ulClientHelper (hostRemotoAddr, ulPuerto);	// IP address: 1.0.0.1/8
           clientApps.Add (ulClientHelper.Install (ue));
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPuerto));
-          serverApps.Add (ulPacketSinkHelper.Install (hosRemoto));
+          serverApps.Add (ulPacketSinkHelper.Install (hostRemoto));
 
 	  // Filter downlink local port
           Ptr<EpcTft> tft = Create<EpcTft> ();
@@ -448,12 +446,25 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
     nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1)); 
   }
 */
+
+ 
+  
   
   // Start simulation
   Simulator::Stop (Seconds (  simTime));
 
+
+
     // Suffice to say that enabling the flow monitor is just the matter of replacing the line ns3.Simulator.Run ()
-  //ThroughputMonitor (&fmhelper, monitor, dataset);
+    // Throughput Monitor
+  FlowMonitorHelper fmhelper;
+  NodeContainer flowMon_nodes;
+  flowMon_nodes.Add (nodosUE);
+  flowMon_nodes.Add (hostRemotoContainer);
+  Ptr<FlowMonitor> monitor;
+  //monitor = fmhelper.InstallAll();
+  monitor = fmhelper.Install (flowMon_nodes);
+  ThroughputMonitor (&fmhelper, monitor);
   
   Simulator::Run ();
 
