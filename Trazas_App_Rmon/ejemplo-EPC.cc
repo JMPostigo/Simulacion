@@ -482,7 +482,7 @@ int main (int argc, char *argv[])
   for (uint32_t i = 0; i < iteraciones; i++) {
     double resultado = RealizaSimulacion(t_simulacion, distancia_nodos);
 
-    NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
+    NS_LOG_UNCOND("Porcentaje correctos: " << resultado << " %");
   }
 
   return 0;
