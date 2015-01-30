@@ -17,6 +17,8 @@
 #include "ns3/packet.h"
 #include "Observador.h"
 
+
+
 #define  CONV_PORCENTAJE    100 // Factor de conversión de tanto por uno a %.
 
 using namespace ns3;
@@ -47,42 +49,13 @@ void Observador::Inicializa() {
   receptor=NULL;
   pkts_enviados=0;
   pkts_recibidos=0;
+  mac_paquetesEnviados = 0;
+  mac_paquetesRecibidos = 0;
 
   NS_LOG_INFO("Fin del método Inicializa.");  
 }
 
-
-void Observador::GestionaTrazaTxApp(Ptr <const Packet> p) {
-  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaTxApp.");
-
-  /* Como se ha transmitido un paquete desde la aplicación origen, se incrementa el 
-  contador de paquetes enviados. */
-
-  pkts_enviados++;
-
-  // Trazamos la traza correspondiente a la transmisión de un paquete con nivel LOGIC.
-  NS_LOG_LOGIC("Paquete enviado número: " << pkts_enviados);  
-
-  NS_LOG_INFO("Fin del método GestionaTrazaTxApp.");  
-}
-
-
-void Observador::GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion) {
-  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaRxApp.");
-
-  /* Como ha llegado un paquete correcto a la aplicación destino, incrementamos el valor
-  del contador de paquetes recibidos. */
-
-  pkts_recibidos++;
-
-  // Trazamos la traza correspondiente a la recepción de un paquete con nivel LOGIC.
-  NS_LOG_LOGIC("Paquete recibido número: " << pkts_recibidos);  
-
-  NS_LOG_INFO("Fin del método GestionaTrazaRxApp.");  
-}
-
-
-void Observador::CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx) {
+void Observador::CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx,Ptr<LteUeNetDevice> net_ue,Ptr<NetDevice> pgw, Ptr<NetDevice> server) {
   NS_LOG_FUNCTION("Entramos en el método CapturaTrazas.");
 
   /* Obtenemos las aplicaciones transmisora y receptora, para facilitar el trabajo 
@@ -102,9 +75,88 @@ void Observador::CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx) {
   receptor->GetObject<PacketSink>()->TraceConnectWithoutContext("Rx", 
                                     MakeCallback(&Observador::GestionaTrazaRxApp, this));    
   
+  // Capturamos las trazas de ConexionEstablished y HandoverStart
+  net_ue->GetRrc ()-> TraceConnectWithoutContext ("ConnectionEstablished",MakeCallback (&Observador::Conexion,this));
+  net_ue->GetRrc ()-> TraceConnectWithoutContext ("HandoverStart",MakeCallback (&Observador::NotifyHandoverStart,this));
+  net_ue->GetRrc ()-> TraceConnectWithoutContext ("HandoverEndOk",MakeCallback (&Observador::NotifyHandoverEnd,this));
+
+
+  // Ponemos a capturar la traza "MacTx" para ver cuantos paquetes envia el netDevice
+  pgw->TraceConnectWithoutContext ("MacTx",MakeCallback (&Observador::PacketSend,this));
+  // Ponemos a capturar la traza "MacRx" para ver cuantos paquetes envia el netDevice
+  server->TraceConnectWithoutContext ("MacRx",MakeCallback (&Observador::PacketReceive,this));
+
   NS_LOG_INFO("Fin del método CapturaTrazas.");  
 }
 
+
+/*       FUNCIONES QUE MANEJAN EVENTOS         */
+
+
+void Observador::Conexion( uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  NS_LOG_INFO("Conexion establecida por el UE: " << imsi << " al CELLID " << cellid );
+}
+
+void Observador::NotifyHandoverStart (uint64_t imsi, uint16_t cellid, uint16_t rnti, uint16_t targetCellId)
+{
+  NS_LOG_INFO("Inicio de Handover entre : " << imsi << " al CELLID " << cellid );
+}
+
+
+void Observador::NotifyHandoverEnd (uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  NS_LOG_INFO("Fin de handover entre el UE: " << imsi << " al CELLID " << cellid );
+}
+
+
+// Manejador del evento "MacTx"
+void Observador::PacketSend(Ptr<const Packet> p)
+{
+  //NS_LOG_INFO("Se acaba de mandar un paquete.");
+  mac_paquetesEnviados ++;
+}
+
+// Manejador del evento "MacRx"
+void Observador::PacketReceive(Ptr<const Packet> p)
+{
+  //NS_LOG_INFO("Se acaba de recibir un paquete.");
+  mac_paquetesRecibidos ++;
+}
+
+
+
+void Observador::GestionaTrazaTxApp(Ptr <const Packet> p) {
+  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaTxApp.");
+
+  /* Como se ha transmitido un paquete desde la aplicación origen, se incrementa el 
+  contador de paquetes enviados. */
+
+  pkts_enviados++;
+
+  // Trazamos la traza correspondiente a la transmisión de un paquete con nivel LOGIC.
+  NS_LOG_LOGIC("Paquete enviado número: " << pkts_enviados);  
+
+  //NS_LOG_INFO("Fin del método GestionaTrazaTxApp.");  
+}
+
+
+void Observador::GestionaTrazaRxApp(Ptr <const Packet> p, const Address & direccion) {
+  NS_LOG_FUNCTION("Entramos en el método GestionaTrazaRxApp.");
+
+  /* Como ha llegado un paquete correcto a la aplicación destino, incrementamos el valor
+  del contador de paquetes recibidos. */
+
+  pkts_recibidos++;
+
+  // Trazamos la traza correspondiente a la recepción de un paquete con nivel LOGIC.
+  NS_LOG_LOGIC("Paquete recibido número: " << pkts_recibidos);  
+
+  //NS_LOG_INFO("Fin del método GestionaTrazaRxApp.");  
+}
+
+
+/*   FUNCIONES PUBLICAS PARA DEVOLVER PARAMETROS    */
 
 double Observador::DevuelvePorcentajeCorrectos() {
   NS_LOG_FUNCTION("Entramos en el método DevuelvePorcentajeCorrectos.");
@@ -119,6 +171,4 @@ double Observador::DevuelvePorcentajeCorrectos() {
 
   return (pkts_recibidos/pkts_enviados)*CONV_PORCENTAJE;
 }
-
-
 
