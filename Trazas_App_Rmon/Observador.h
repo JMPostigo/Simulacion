@@ -11,9 +11,6 @@
 #include "ns3/packet.h"
 #include "ns3/address.h"
 #include "ns3/double.h"
-#include "ns3/nstime.h"
-#include "ns3/average.h"
-#include <map>
 
 using namespace ns3;
 
@@ -38,12 +35,6 @@ public:
   // Método que captura las trazas consideradas.
   void CapturaTrazas(Ptr<Application> tx, Ptr<Application> rx);
 
-  // Método que devuelve el acumulador de tiempo de retardo.
-  double DevuelveMediaRetardo();
-  
-  // Método que devuelve la estructura map.
-  std::map<uint64_t, Time> DevuelveEstrMap();
-
   // Método que devuelve el porcentaje de paquetes correctos en la aplicación destino.
   double DevuelvePorcentajeCorrectos();
 
@@ -54,12 +45,6 @@ private:
 
   // Aplicación receptora en el escenario.
   Ptr<Application> receptor;
-
-  // Estructura de tipo map que guarda el tiempo de envío de cada paquete.
-  std::map<uint64_t, Time> map_t_envio;
-  
-  // Acumulador del retardo de transmisión. Usamos la clase Average.
-  Average<double> acum_retardo_tx;
 
   // Paquetes enviados por la aplicación origen.
   double pkts_enviados;

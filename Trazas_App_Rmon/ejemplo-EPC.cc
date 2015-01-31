@@ -37,46 +37,26 @@
 #define  NUM_UE               1 // Número de nodos UE (fijo).
 #define  NUM_ENB              1 // Número de nodos eNB de partida.
 #define  NUM_REMOTOS          1 // Número de equipos remotos accesibles por el UE (fijo).
-#define  T_SIM              5.0 // Valor por defecto del tiempo de simulación.
 #define  POS_UE               0 // Posición inicial del UE.
-#define  RADIO_COB_ENB      150 // Radio de cobertura de cada nodo eNB (en metros).
-#define  LONG_COB          1200 /* Valor por defecto de la longitud (en metros) del tramo 
+#define  LONG_COB          1000 /* Valor por defecto de la longitud (en metros) del tramo 
                                    que se pretende cubrir. */
 #define  INCR_POS_UE         20 // Incremento en la posición del nodo UE.
-#define  MIN_PORCENTAJE      40 // Valor de porcentaje de paquetes correctos mínimo a cumplir.
-#define  NUM_ITERACIONES      2 /* Valor por defecto del número de iteraciones por cada 
+#define  NUM_ITERACIONES      3 /* Valor por defecto del número de iteraciones por cada 
                                    punto de la gráfica. */
+#define  NUM_CURVAS           3 // Número de curvas a representar en cada gráfica.
 #define  PTO_SUBIDA       20000 // Puerto TCP de subida (flujo del UE al equipo remoto).
 
 
-/* Definimos un nuevo tipo, llamado ACUMULADOR, que contendrá 2 variables Average<double> que
-almacenarán las estadísticas de las simulaciones realizadas para cada caso a simular.
-Las estadísticas seŕán el porcentaje de paquetes correctos y el retardo medio. */
+using namespace ns3;
 
-typedef struct acumulador {
-  Average<double> porcentaje_correctos;
-  Average<double> media_retardo;
-} ACUMULADOR;
-
-/* Definimos un nuevo tipo, llamado ESTADISTICAS, que contendrá 2 variables double: una para
-el porcentaje de paquetes correctos, y otra para el retardo medio. Recogerá los valores que 
-devuelva el método RealizaSimulacion. */
-
-typedef struct estadisticas {
-  double porcentaje_correctos;
-  double media_retardo;
-} ESTADISTICAS;
 
 /* Definimos un nuevo tipo, llamado PLOT_ESTADISTICAS, que contendrá las dos variables 
-Gnuplot encargadas de generar las curvas de cada estadísticas. */
+Gnuplot encargadas de generar las curvas de cada estadística. */
 
 typedef struct plot_estadisticas {
   Gnuplot porcentaje_correctos;
-  Gnuplot media_retardo;
+  Gnuplot numero_nodos_eNB;
 } PLOT_ESTADISTICAS;
-
-
-using namespace ns3;
 
 
 // Admitimos el uso de trazas.
@@ -137,7 +117,9 @@ double CalculaIC(Average<double> acumulador) {
 
 
 
-ESTADISTICAS RealizaSimulacion(double t_simulacion, double posicion_UE, uint16_t num_nodos_eNB) {
+double RealizaSimulacion(double t_simulacion, double posicion_UE, double radio_cobertura_eNB,
+                         uint16_t num_nodos_eNB) {
+
   NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
  
   /* Ante los problemas que se ha tenido intentando sacar algún Helper o variable
@@ -264,7 +246,7 @@ ESTADISTICAS RealizaSimulacion(double t_simulacion, double posicion_UE, uint16_t
   Ptr<ListPositionAllocator> posicionNodos = CreateObject<ListPositionAllocator> ();
 
   for (uint16_t i = 0; i < num_nodos_eNB; i++) {
-    posicionNodos->Add (Vector (RADIO_COB_ENB*(2*i+1), 0, 0));
+    posicionNodos->Add (Vector (radio_cobertura_eNB*(2*i+1), 0, 0));
   }
 
   for (uint16_t i = 0; i < NUM_UE; i++) {
@@ -373,21 +355,9 @@ ESTADISTICAS RealizaSimulacion(double t_simulacion, double posicion_UE, uint16_t
   /* Devolvemos el porcentaje de paquetes correctos y la media del retardo de propagación,
   guardándolos en una variable de tipo ESTADISTICAS, que se devolverá al método principal. */
 
-  ESTADISTICAS resultado_sim = {nodos_obs.DevuelvePorcentajeCorrectos(), 
-                                nodos_obs.DevuelveMediaRetardo()};
+  double resultado_sim = nodos_obs.DevuelvePorcentajeCorrectos();
 
-  NS_LOG_INFO("Valor del porcentaje de paquetes correctos: " 
-                                              << resultado_sim.porcentaje_correctos);
-  NS_LOG_INFO("Valor del retardo de propagación: " << resultado_sim.media_retardo);
-
-  /* Comprobamos que la estructura map esté vacía. De no estarlo, lo trazamos con niver WARN,
-  ya que indica que hay paquetes que se han tirado. */
-  
-  if (nodos_obs.DevuelveEstrMap().size() == 0)
-    NS_LOG_INFO("Estructura map vacía. No se han tirado paquetes en esta simulación.");
-  else {
-    NS_LOG_WARN("Estructura map todavía con valores. Se han tirado paquetes en esta simulación.");
-  }
+  NS_LOG_INFO("Valor del porcentaje de paquetes correctos: " << resultado_sim);
 
   /* Para acabar, reinicializamos los atributos del observador (incluyendo la estructura map, 
   que de tener algún valor, volverá a vaciarse). */
@@ -410,9 +380,15 @@ int main (int argc, char *argv[])
   // Parámetros de la simulación, con sus valores por defecto.
 
   double long_cobertura = LONG_COB;       // Longitud del tramo que se pretende cubrir.
-  double t_simulacion = T_SIM;            // Tiempo de simulación.
+  double t_simulacion[NUM_CURVAS] = {5.0, 8.0, 20.0};  // Tiempos de simulación para las pruebas.
   uint16_t iteraciones = NUM_ITERACIONES; // Número de iteraciones por punto de la gráfica.
   double posicion_UE = POS_UE;            // Posición inicial del nodo UE (se incrementará).
+  double radio_cobertura_eNB[NUM_CURVAS] = {150, 140, 130}; /* Radio de cobertura de cada nodo 
+                                                               eNB (en metros), para cada caso de 
+                                                               tiempo de simulación. */
+  double min_porcentaje[NUM_CURVAS] = {40, 50, 60};   /* Valor del porcentaje de paquetes correctos 
+                                                         mínimo a cumplir, por cada caso del tiempo 
+                                                         de simulación. */
   uint16_t num_nodos_eNB = NUM_ENB;       // Número de nodos eNB de partida (se incrementará).
 
   NS_LOG_INFO("Instanciadas e inicializadas las variables de simulación.");
@@ -449,7 +425,6 @@ int main (int argc, char *argv[])
 
   cmd.AddValue ("long_cobertura", "Longitud del tramo que se pretende cubrir (en metros)", 
                                                                                long_cobertura);
-  cmd.AddValue ("t_simulacion", "Duración total de la simulación (en segundos)", t_simulacion);
   cmd.AddValue ("iteraciones", "Número de iteraciones por punto de la gráfica", iteraciones);
 
   cmd.Parse (argc, argv);
@@ -468,17 +443,15 @@ int main (int argc, char *argv[])
   un valor de "iteraciones" simulaciones, computaremos la media de los valores obtenidos y 
   hallaremos el intervalo de confianza para cada punto de la gráfica a calcular. */
 
-  ACUMULADOR acum;
-
-  acum.porcentaje_correctos.Reset();
-  acum.media_retardo.Reset();         // Los inicializamos con un reset.
+  Average<double> acum_porcentaje_correctos;
+  acum_porcentaje_correctos.Reset();
 
   NS_LOG_INFO("Acumuladores instanciados y reseteados.");
 
   /* En esta variable, se guardarán los distintos resultados de la simulación, que se
   irán añadiendo a la variable ACUMULADOR con un Update, para luego computar la media. */
 
-  ESTADISTICAS resultado_sim;
+  double resultado_sim;
 
   NS_LOG_INFO("Instanciada la variable que almacenará los resultados.");
 
@@ -488,16 +461,14 @@ int main (int argc, char *argv[])
   PLOT_ESTADISTICAS plot;
   plot.porcentaje_correctos.SetTitle ("Práctica 8. PORCENTAJE CORRECTOS. Grupo 4");
   plot.porcentaje_correctos.SetLegend ("posición_nodo_UE (m)", "porcentaje_correctos (%)");
-  plot.media_retardo.SetTitle ("Práctica 8. RETARDO MEDIO. Grupo 4");
-  plot.media_retardo.SetLegend ("posición_nodo_UE (m)", "retardo_medio (s)");
-  
-  Gnuplot2dDataset curva_porcentaje;
-  curva_porcentaje.SetStyle(Gnuplot2dDataset::LINES_POINTS);
-  curva_porcentaje.SetErrorBars (Gnuplot2dDataset::Y);   
-  
-  Gnuplot2dDataset curva_retardo;
-  curva_retardo.SetStyle(Gnuplot2dDataset::LINES_POINTS);
-  curva_retardo.SetErrorBars (Gnuplot2dDataset::Y); 
+  plot.numero_nodos_eNB.SetTitle ("Práctica 8. EVOLUCIÓN DEL NÚMERO DE NODOS ENB. Grupo 4");
+  plot.numero_nodos_eNB.SetLegend ("posición_nodo_UE (m)", "número_nodos_eNB");
+
+  std::string titulo_curva[NUM_CURVAS] = {"t_sim=5s", "t_sim=8s", "t_sim=20s"};    
+  Gnuplot2dDataset curvas_porcentaje[NUM_CURVAS];
+  Gnuplot2dDataset curvas_nodos_eNB[NUM_CURVAS];   /* Se generarán como tablas y no
+                                                      como estructuras por si variase
+                                                      el valor de NUM_CURVAS. */
   
   NS_LOG_INFO("Inicialización de plot e instanciación de curvas realizada.");
 
@@ -530,67 +501,82 @@ int main (int argc, char *argv[])
     de simulaciones.
   }*/
 
-  while (posicion_UE <= long_cobertura) {
-    NS_LOG_DEBUG("\nPosición del nodo UE: " << posicion_UE << " metros");
-    NS_LOG_DEBUG("Tenemos " << num_nodos_eNB << " nodos eNB colocados\n");
+  for (uint16_t i = 1; i < 2; i++) {
+    NS_LOG_DEBUG("Generación de curva número: " << i+1);
 
-    // Realizamos las "iteraciones" simulaciones, añadiendo los resultados a su acumulador.
-    for (uint16_t i = 1; i <= iteraciones; i++) {
-      NS_LOG_INFO("Simulación número: " << i);
+    /* Establecemos el título de la curva (su nombre vendrá en función del tiempo de
+    simulación utilizado), y fijamos el estilo y las líneas de error para el intervalo 
+    de confianza. */
 
-      resultado_sim = RealizaSimulacion(t_simulacion, posicion_UE, num_nodos_eNB);
+    curvas_porcentaje[i].SetTitle(titulo_curva[i]);
+    curvas_porcentaje[i].SetStyle(Gnuplot2dDataset::LINES_POINTS);
+    curvas_porcentaje[i].SetErrorBars (Gnuplot2dDataset::Y);   
 
-      acum.porcentaje_correctos.Update(resultado_sim.porcentaje_correctos);
-      acum.media_retardo.Update(resultado_sim.media_retardo);
+    curvas_nodos_eNB[i].SetTitle(titulo_curva[i]);
+    curvas_nodos_eNB[i].SetStyle(Gnuplot2dDataset::LINES_POINTS);
 
-      NS_LOG_INFO("Realizada simulación número: " << i);
+    NS_LOG_INFO("Gráfica " << i+1 << " preparada para las estadísticas.\n");
+
+    while (posicion_UE <= long_cobertura) {
+      NS_LOG_DEBUG("\nPosición del nodo UE: " << posicion_UE << " metros");
+      NS_LOG_DEBUG("Tenemos " << num_nodos_eNB << " nodos eNB colocados\n");
+
+      // Realizamos las "iteraciones" simulaciones, añadiendo los resultados a su acumulador.
+      for (uint16_t j = 1; j <= iteraciones; j++) {
+        NS_LOG_INFO("Simulación número: " << j);
+
+        resultado_sim = RealizaSimulacion(t_simulacion[i], posicion_UE, radio_cobertura_eNB[i], 
+                                        num_nodos_eNB);
+        NS_LOG_UNCOND(resultado_sim);
+        acum_porcentaje_correctos.Update(resultado_sim);
+
+        NS_LOG_INFO("Realizada simulación número: " << j);
+      }
+
+      if (acum_porcentaje_correctos.Avg() < min_porcentaje[i]) {
+        num_nodos_eNB++;
+        NS_LOG_DEBUG("Se necesita un nuevo nodo eNB. Añadiendo un nodo eNB más.");
+      }
+
+      else {
+        NS_LOG_DEBUG("\nValor medio del porcentaje de paquetes correctos (%): ");
+        curvas_porcentaje[i].Add(posicion_UE, acum_porcentaje_correctos.Avg(), 
+                                                        CalculaIC(acum_porcentaje_correctos));
+
+        curvas_nodos_eNB[i].Add(posicion_UE, (double) num_nodos_eNB);
+
+        posicion_UE += INCR_POS_UE;
+
+        NS_LOG_INFO("\nCalculado punto de la curva con posición del nodo UE: " 
+                                                                  << posicion_UE << " metros");
+      }
+
+      // Y reseteamos los acumuladores.
+
+      acum_porcentaje_correctos.Reset();
+
+      NS_LOG_INFO("Acumuladores reseteados.");
     }
 
-    if (acum.porcentaje_correctos.Avg() < MIN_PORCENTAJE) {
-      num_nodos_eNB++;
-      NS_LOG_DEBUG("Se necesita un nuevo nodo eNB. Añadiendo un nodo eNB más.");
-    }
+    // Añadimos los puntos conseguidos a su respectivo plot.
 
-    else {
-      NS_LOG_DEBUG("\nValor medio del porcentaje de paquetes correctos (%): ");
-      curva_porcentaje.Add(posicion_UE, acum.porcentaje_correctos.Avg(), 
-                                                      CalculaIC(acum.porcentaje_correctos));
+    plot.porcentaje_correctos.AddDataset(curvas_porcentaje[i]);
+    plot.numero_nodos_eNB.AddDataset(curvas_nodos_eNB[i]);
 
-     // NS_LOG_DEBUG("Valor medio del retardo medio (s): ");
-     // curva_retardo.Add(posicion_UE, acum.media_retardo.Avg(), CalculaIC(acum.media_retardo));
-      
-      posicion_UE += INCR_POS_UE;
-
-      NS_LOG_INFO("\nCalculado punto de la curva con posición del nodo UE: " 
-                                                                << posicion_UE << " metros");
-    }
-
-    // Y reseteamos los acumuladores.
-
-    acum.porcentaje_correctos.Reset();
-    acum.media_retardo.Reset();
-
-    NS_LOG_INFO("Acumuladores reseteados.");
+    NS_LOG_INFO("Se ha generado la curva " << i+1);
   }
-
-  // Añadimos los puntos conseguidos a su respectivo plot.
-
-  plot.porcentaje_correctos.AddDataset(curva_porcentaje);
-  //plot.media_retardo.AddDataset(curva_retardo);
-
-  NS_LOG_INFO("Se han generado las curvas.");
 
   /* Finalmente, generamos el fichero, añadimos pause -1 para que no se cierre repentinamente
   al llamarlo con gnuplot, y cerramos el descriptor de fichero. */
   
   std::ofstream fichero_porcentaje("practica08-1.plt");
-  //std::ofstream fichero_retardo("practica08-2.plt");
+  std::ofstream fichero_nodos_eNB("practica08-2.plt");
   plot.porcentaje_correctos.GenerateOutput(fichero_porcentaje);
-  //plot.media_retardo.GenerateOutput(fichero_retardo);
+  plot.numero_nodos_eNB.GenerateOutput(fichero_nodos_eNB);
   fichero_porcentaje << "pause -1" << std::endl;
-  //fichero_retardo << "pause -1" << std::endl;
+  fichero_nodos_eNB << "pause -1" << std::endl;
   fichero_porcentaje.close();
-  //fichero_retardo.close();
+  fichero_nodos_eNB.close();
 
   NS_LOG_INFO("Ficheros generados. Fin del programa.");  
 
