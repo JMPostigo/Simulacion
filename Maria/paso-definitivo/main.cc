@@ -1,4 +1,3 @@
-
 /*
 *       PyS   -   Practica8
 *     Maria
@@ -82,7 +81,7 @@ void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
   }
 
 
-double RealizaSimulacion(double simTime, double posicion[10], double posicion_nodo,uint16_t n_enb) {
+double RealizaSimulacion(double simTime, double posicion[20], double posicion_nodo,uint16_t n_enb) {
   NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
 
   
@@ -433,9 +432,9 @@ main (int argc, char *argv[])
     double ruidoUe = 8;
     double posicion_nodo = 20;
      
-    uint32_t iteraciones = 100;
+    uint32_t iteraciones = 3;
     uint16_t n_enb = 1;
-    double posicion[10];
+    double posicion[20];
 
   /** Configuracion por defecto  **/
 
@@ -467,32 +466,80 @@ main (int argc, char *argv[])
   cmd.AddValue ("t_simulacion", "Total duration of the simulation", t_simulacion);
   cmd.Parse (argc, argv);
   
-    
-    
-  std::cout << "Configuracion de parametros terminado" << std::endl;
-
   NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
 
-  posicion[(n_enb-1)]=0;
-  for (uint32_t i = 7; (i <= iteraciones)  ||  (posicion_nodo*i < 10000) ; i++) {
-     NS_LOG_UNCOND("distancia: " << posicion_nodo*i  <<  " - Numero de EnB: " << n_enb); 
-    double resultado = RealizaSimulacion(t_simulacion, posicion, posicion_nodo*i, n_enb);
+  //   Definicion de Acumuladores
+   Average<double> ac_porc_simulacion;
 
-    NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
+  //   DEFINICION GRAFICAS
+  Gnuplot plot_porc;
+  plot_porc.SetTitle ("P8  - marvalcam1 josposagu ramperher");
+  plot_porc.SetLegend ("distancia a cero", "Porcentaje de paquetes correctos"); 
+  
+  Gnuplot2dDataset g_porc;
+  g_porc.SetTitle ("Porcentaje de paquetes de la App correctos");
+  g_porc.SetStyle (Gnuplot2dDataset::POINTS);
+  g_porc.SetErrorBars (Gnuplot2dDataset::Y);
+
+  Gnuplot plot_num_enb;
+  plot_num_enb.SetTitle ("P8  - marvalcam1 josposagu ramperher");
+  plot_num_enb.SetLegend ("distancia a cero", "Numero de enBs"); 
+  
+  Gnuplot2dDataset g_enb;
+  g_enb.SetTitle ("Numero de enBs que se aniaden por la posicion");
+  g_enb.SetStyle (Gnuplot2dDataset::POINTS);
+  g_enb.SetErrorBars (Gnuplot2dDataset::Y);
+
+  // Simulacion
+  posicion[(n_enb-1)]=0;
+  g_enb.Add(posicion[n_enb-1], (n_enb),0);
+
+  for (uint32_t i = 2; posicion_nodo*i < 4000 ; i++) {
+    NS_LOG_UNCOND("distancia: " << posicion_nodo*i  <<  " - Numero de EnB: " << n_enb); 
+    double resultado;
+    for (uint32_t j = 0;j<iteraciones;j++)
+	{
+    		resultado = RealizaSimulacion(t_simulacion, posicion, posicion_nodo*i, n_enb);
+  	        ac_porc_simulacion.Update(resultado);
+                NS_LOG_UNCOND("     - Porcentaje correctos: " << resultado << "   -   iteracion: " << j);
+                
+	}
+
+    NS_LOG_UNCOND("    FIN MEDIA: Porcentaje de paq correctos " << ac_porc_simulacion.Avg() << "%");
+ 
+    double inter_conf =  2.9200*ac_porc_simulacion.Stddev()/iteraciones;
+    g_porc.Add( posicion_nodo*i , ac_porc_simulacion.Avg(),inter_conf);
+          
+    ac_porc_simulacion.Reset ();
+
+
     if (resultado < 45.0 )
 	{
            posicion[n_enb]=(posicion_nodo*i) + ( (posicion_nodo*i)-posicion[(n_enb-1)] ); // Posicion de la nueva antena
+           g_enb.Add(posicion[n_enb], (n_enb+1),0);
 	   n_enb++;
-           i=i++; // Para se acerque a la nueva antena y vuelva a tener un bajo procentaje 
+           i=i+1; // Para se acerque a la nueva antena y vuelva a tener un bajo procentaje 
 	}
-  }
+    }
 
-
+  // Exportar las graficas
+  plot_porc.AddDataset (g_porc);
+  plot_num_enb.AddDataset (g_enb);
+ 
+  std::ofstream fichero1("p7-porc-grupo.plt");
+  plot_porc.GenerateOutput (fichero1);
+  fichero1 << "pause -1" << std::endl;
+  fichero1.close();
+  
+  std::ofstream fichero2("p7-enb-grupo.plt");
+  plot_num_enb.GenerateOutput (fichero2);
+  fichero2 << "pause -1" << std::endl;
+  fichero2.close();  
+ 
   
   std::cout << "The simulation finished!" << std::endl; 
   std::cout << "" << std::endl;
 	
   return 0;
 }
-
 
