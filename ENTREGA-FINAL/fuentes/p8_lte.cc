@@ -41,9 +41,9 @@
 #define  LONG_COB          1000 /* Valor por defecto de la longitud (en metros) del tramo 
                                    que se pretende cubrir. */
 #define  INCR_POS_UE         20 // Incremento en la posición del nodo UE.
-#define  NUM_ITERACIONES      5 /* Valor por defecto del número de iteraciones por cada 
+#define  NUM_ITERACIONES      7 /* Valor por defecto del número de iteraciones por cada 
                                    punto de la gráfica. */
-#define  NUM_CURVAS           3 // Número de curvas a representar en cada gráfica.
+#define  NUM_CURVAS           2 // Número de curvas a representar en cada gráfica.
 #define  PTO_SUBIDA       20000 // Puerto TCP de subida (flujo del UE al equipo remoto).
 #define  MIN_INICIO_APPS    1.0
 #define  MAX_INICIO_APPS  1.010 // Valores mínimo y máximo para el inicio de las aplicaciones.
@@ -382,13 +382,13 @@ int main (int argc, char *argv[])
   double long_cobertura = LONG_COB;       // Longitud del tramo que se pretende cubrir.
   uint16_t iteraciones = NUM_ITERACIONES; // Número de iteraciones por punto de la gráfica.
   double posicion_UE = POS_UE;            // Posición inicial del nodo UE (se incrementará).
-  double t_simulacion[NUM_CURVAS] = {5.0, 8.0, 10.0};  // Tiempos de simulación para las pruebas.
-  double radio_cobertura_eNB[NUM_CURVAS] = {150, 140, 130}; /* Radio de cobertura de cada nodo 
-                                                               eNB (en metros), para cada caso de 
-                                                               tiempo de simulación. */
-  double min_porcentaje[NUM_CURVAS] = {40, 50, 55};   /* Valor del porcentaje de paquetes correctos 
-                                                         mínimo a cumplir, por cada caso del tiempo 
-                                                         de simulación. */
+  double t_simulacion[NUM_CURVAS] = {5.0, 8.0};  // Tiempos de simulación para las pruebas.
+  double radio_cobertura_eNB[NUM_CURVAS] = {150, 140}; /* Radio de cobertura de cada nodo 
+                                                          eNB (en metros), para cada caso de 
+                                                          tiempo de simulación. */
+  double min_porcentaje[NUM_CURVAS] = {40, 50};   /* Valor del porcentaje de paquetes correctos 
+                                                     mínimo a cumplir, por cada caso del tiempo 
+                                                     de simulación. */
   uint16_t num_nodos_eNB = NUM_ENB;       // Número de nodos eNB de partida (se incrementará).
 
   NS_LOG_INFO("Instanciadas e inicializadas las variables de simulación.");
@@ -467,7 +467,7 @@ int main (int argc, char *argv[])
   plot.numero_nodos_eNB.SetTitle ("Práctica 8. EVOLUCIÓN DEL NÚMERO DE NODOS ENB. Grupo 4");
   plot.numero_nodos_eNB.SetLegend ("posición_nodo_UE (m)", "número_nodos_eNB");
 
-  std::string titulo_curva[NUM_CURVAS] = {"t_sim=5s", "t_sim=8s", "t_sim=10s"};    
+  std::string titulo_curva[NUM_CURVAS] = {"t_sim=5s", "t_sim=8s"};    
   Gnuplot2dDataset curvas_porcentaje[NUM_CURVAS];
   Gnuplot2dDataset curvas_nodos_eNB[NUM_CURVAS];   /* Se generarán como tablas y no
                                                       como estructuras por si variase
@@ -510,7 +510,8 @@ int main (int argc, char *argv[])
     }
 
     Tras barrer todo el camino a cubrir, añadimos los puntos obtenidos a cada variable plot, y
-    pasamos a la siguiente curva.
+    pasamos a la siguiente curva, con la previa reinicialización de variables para partir de 
+    la posición 0 y con 1 nodo eNB.
   } */
 
   for (uint16_t i = 0; i < NUM_CURVAS; i++) {
@@ -541,7 +542,7 @@ int main (int argc, char *argv[])
         NS_LOG_INFO("Simulación número: " << j);
 
         resultado_sim = RealizaSimulacion(t_simulacion[i], posicion_UE, radio_cobertura_eNB[i], 
-                                        num_nodos_eNB);
+                                          num_nodos_eNB);
 
         acum_porcentaje_correctos.Update(resultado_sim);
 
@@ -577,6 +578,12 @@ int main (int argc, char *argv[])
 
     plot.porcentaje_correctos.AddDataset(curvas_porcentaje[i]);
     plot.numero_nodos_eNB.AddDataset(curvas_nodos_eNB[i]);
+
+    /* Por último, reinicializamos los valores de la distancia inicial del nodo UE y del número
+    de nodos eNB para la generación de la siguiente curva. */
+
+    posicion_UE = POS_UE;
+    num_nodos_eNB = NUM_ENB; 
 
     NS_LOG_INFO("Se ha generado la curva " << i+1);
   }
