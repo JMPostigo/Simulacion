@@ -81,14 +81,13 @@ void MonitorizadorFlujo (FlowMonitorHelper* fmhelper, Ptr<FlowMonitor> flowMon)
   }
 
 
-double RealizaSimulacion(double simTime, double distancia_Enbs) {
+double RealizaSimulacion(double simTime, double posicion[20], double posicion_nodo,uint16_t n_enb) {
   NS_LOG_FUNCTION("Entramos en el método RealizaSimulacion.");
 
   
-  uint16_t   n_ues = 3;
-  uint16_t  n_enb = 2;	
+  uint16_t   n_ues = 1;	
   uint16_t bearersPorUE = 1;
-  double velocidad = 2*distancia_Enbs/20;	// velocidad del UE en m/s
+  //double velocidad = 2*distancia_Enbs/20;	// velocidad del UE en m/s
     
 
 
@@ -195,25 +194,21 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
    *            - Resto de UEs: estan quietos
    */
   ueMobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
-  ueMobility.Install (nodosUE.Get (0));
-  nodosUE.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (distancia_Enbs*0.8,0, 0));
-  nodosUE.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (  velocidad, 0, 0));
-  for (uint16_t i = 1; i <     n_ues; i++)
+  for (uint16_t i = 0; i <     n_ues; i++)
     {
       ueMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
       ueMobility.Install (nodosUE.Get (i));
-      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  distancia_Enbs * i , 50, 0));
+      nodosUE.Get (i)->GetObject<MobilityModel> ()->SetPosition (Vector (  posicion_nodo , 50, 0));
     }
   
   /*
    * Modelo de movilidad para los ENB: todos son fijos
    */
   Ptr<ListPositionAllocator> HenbPositionAlloc = CreateObject<ListPositionAllocator> ();
-  //Vector henbPosition (  distancia_Enbs * (4),   distancia_Enbs * (3.8), 0);
-  //HenbPositionAlloc->Add (henbPosition);
-  for (uint16_t i = 1; i <=  n_enb; i++)
+
+  for (uint16_t i = 0; i <  n_enb; i++)
     {
-      Vector henbPosition (  distancia_Enbs * (i), 0, 0);
+      Vector henbPosition (  posicion[i], 0, 0); // La primera antena estara en (0,0,0)
       HenbPositionAlloc->Add (henbPosition);
     }
   henbMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -259,14 +254,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   //lteHelper->Attach (ueLteDevs.Get (0), henbLteDevs.Get (1));
   for (uint16_t i = 0; i <  n_ues; i++)	
     {
-      if (i != (n_ues-1))
-      	{	
-      		lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (0));
-      	}
-      else
-  	{
-      		lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (1));
-	}
+      		lteHelper->Attach (ueLteDevs.Get (i), henbLteDevs.Get (n_enb-1));
     }
 	
   NS_LOG_LOGIC ("Establecemos las aplicaciones en los UE");
@@ -362,7 +350,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
   if (bearersPorUE >= 1)
   {
     //  void CapturaTrazas(Ptr<Application>, Ptr<Application>, Ptr<LteUeNetDevice> ,Ptr<NetDevice>, Ptr<NetDevice>);
-    nodos_obs.CapturaTrazas(clientApps.Get(1), serverApps.Get(1), DynamicCast<LteUeNetDevice> (ueLteDevs.Get(0)),internetDevices.Get (0), internetDevices.Get (1)); 
+    nodos_obs.CapturaTrazas(clientApps.Get(0), serverApps.Get(0), DynamicCast<LteUeNetDevice> (ueLteDevs.Get(0)),internetDevices.Get (0), internetDevices.Get (1)); 
   }
 
 
@@ -389,7 +377,7 @@ double RealizaSimulacion(double simTime, double distancia_Enbs) {
 
 
   // Imprime el retraso
-  for (int j = 0;j<2;j++) {
+  for (int j = 0;j<1;j++) {
         NS_LOG_INFO ("  ----  Ue: " << j << " ----- " );
                 
         for (int i = 3; i<5; i++) {
@@ -442,8 +430,11 @@ main (int argc, char *argv[])
     double ruidoEnb = 8;
     double potenciaUe = 20;
     double ruidoUe = 8;
+    double posicion_nodo = 20;
      
-    uint32_t iteraciones = 100;
+    uint32_t iteraciones = 3;
+    uint16_t n_enb = 1;
+    double posicion[20];
 
   /** Configuracion por defecto  **/
 
@@ -474,24 +465,81 @@ main (int argc, char *argv[])
   cmd.AddValue ("distancia_Enbs", "Distance between two adjacent HeNBs", distancia_Enbs);
   cmd.AddValue ("t_simulacion", "Total duration of the simulation", t_simulacion);
   cmd.Parse (argc, argv);
-
-    
-    
-  std::cout << "Configuracion de parametros terminado" << std::endl;
-
+  
   NS_LOG_INFO("Fin de tratamiento de variables de entorno.");
 
-  for (uint32_t i = 10; i <= iteraciones; i++) {
-     NS_LOG_UNCOND("distancia: " << distancia_Enbs*i); 
-    double resultado = RealizaSimulacion(t_simulacion, distancia_Enbs*i);
+  //   Definicion de Acumuladores
+   Average<double> ac_porc_simulacion;
 
-    NS_LOG_UNCOND("Porcentaje correctos: " << resultado);
-  }
+  //   DEFINICION GRAFICAS
+  Gnuplot plot_porc;
+  plot_porc.SetTitle ("P8  - marvalcam1 josposagu ramperher");
+  plot_porc.SetLegend ("distancia a cero", "Porcentaje de paquetes correctos"); 
+  
+  Gnuplot2dDataset g_porc;
+  g_porc.SetTitle ("Porcentaje de paquetes de la App correctos");
+  g_porc.SetStyle (Gnuplot2dDataset::POINTS);
+  g_porc.SetErrorBars (Gnuplot2dDataset::Y);
+
+  Gnuplot plot_num_enb;
+  plot_num_enb.SetTitle ("P8  - marvalcam1 josposagu ramperher");
+  plot_num_enb.SetLegend ("distancia a cero", "Numero de enBs"); 
+  
+  Gnuplot2dDataset g_enb;
+  g_enb.SetTitle ("Numero de enBs que se aniaden por la posicion");
+  g_enb.SetStyle (Gnuplot2dDataset::POINTS);
+  g_enb.SetErrorBars (Gnuplot2dDataset::Y);
+
+  // Simulacion
+  posicion[(n_enb-1)]=0;
+  g_enb.Add(posicion[n_enb-1], (n_enb),0);
+
+  for (uint32_t i = 2; posicion_nodo*i < 4000 ; i++) {
+    NS_LOG_UNCOND("distancia: " << posicion_nodo*i  <<  " - Numero de EnB: " << n_enb); 
+    double resultado;
+    for (uint32_t j = 0;j<iteraciones;j++)
+	{
+    		resultado = RealizaSimulacion(t_simulacion, posicion, posicion_nodo*i, n_enb);
+  	        ac_porc_simulacion.Update(resultado);
+                NS_LOG_UNCOND("     - Porcentaje correctos: " << resultado << "   -   iteracion: " << j);
+                
+	}
+
+    NS_LOG_UNCOND("    FIN MEDIA: Porcentaje de paq correctos " << ac_porc_simulacion.Avg() << "%");
+ 
+    double inter_conf =  2.9200*ac_porc_simulacion.Stddev()/iteraciones;
+    g_porc.Add( posicion_nodo*i , ac_porc_simulacion.Avg(),inter_conf);
+          
+    ac_porc_simulacion.Reset ();
 
 
+    if (resultado < 45.0 )
+	{
+           posicion[n_enb]=(posicion_nodo*i) + ( (posicion_nodo*i)-posicion[(n_enb-1)] ); // Posicion de la nueva antena
+           g_enb.Add(posicion[n_enb], (n_enb+1),0);
+	   n_enb++;
+           i=i+1; // Para se acerque a la nueva antena y vuelva a tener un bajo procentaje 
+	}
+    }
+
+  // Exportar las graficas
+  plot_porc.AddDataset (g_porc);
+  plot_num_enb.AddDataset (g_enb);
+ 
+  std::ofstream fichero1("p7-porc-grupo.plt");
+  plot_porc.GenerateOutput (fichero1);
+  fichero1 << "pause -1" << std::endl;
+  fichero1.close();
+  
+  std::ofstream fichero2("p7-enb-grupo.plt");
+  plot_num_enb.GenerateOutput (fichero2);
+  fichero2 << "pause -1" << std::endl;
+  fichero2.close();  
+ 
   
   std::cout << "The simulation finished!" << std::endl; 
   std::cout << "" << std::endl;
 	
   return 0;
 }
+
